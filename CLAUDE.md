@@ -12,18 +12,24 @@ The invariants in `docs/HLD.md` §2 are non-negotiable. If a task seems to requi
 one, or changing a decision, **stop and ask** — never change a decision silently. New
 decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
 
-## Workflow
+## Workflow (one branch and one Pull Request per step)
 
 1. Work on **one step of `docs/PLAN.md` at a time**, only when asked.
-2. Before coding, restate the step's scope and acceptance criteria in a few lines. If anything
+2. Start from an up-to-date `main`: `git switch main && git pull`, then create the step branch
+   `step-<N>-<short-slug>` (e.g. `step-1-schema`).
+3. Before coding, restate the step's scope and acceptance criteria in a few lines. If anything
    is ambiguous, ask before writing code.
-3. Implement, then run `./mvnw spotless:apply verify` until it is green.
-4. Stop and report: what changed (files), how each acceptance criterion is covered (test
-   names), anything deferred or questionable.
-5. **Do not commit until the user has reviewed and approved the step.** Then commit with
-   Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `build:`, `chore:`),
-   one commit per step unless asked otherwise.
-6. Never start the next step on your own.
+4. Implement, then run `./mvnw spotless:apply verify` until it is green.
+5. Commit with Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `build:`,
+   `chore:`) — the commit message given in the plan for that step. Push the branch and open a
+   Pull Request with `gh pr create`, filling `.github/pull_request_template.md`:
+   - **Summary** — what the step adds, in a few lines.
+   - **Decisions and invariants** — which `D-…` / `I…` this step implements or touches.
+   - **Acceptance criteria** — each criterion → the test(s) that prove it.
+   - **Review notes** — anything deferred, questionable or worth a closer look.
+6. Stop and report the PR link. **The user reviews and merges** (squash). Review feedback is
+   addressed with new commits on the same branch.
+7. **Never** push to `main`, merge a PR, force-push or start the next step on your own.
 
 ## Stack
 
@@ -115,5 +121,5 @@ common/       ProblemDetail handler, security config, Clock bean, shared config
 - Change an invariant, contract or decision without asking.
 - Add endpoints, fields or features that are not in `docs/HLD.md`.
 - Add dependencies without asking.
-- Commit before the user approves the step.
+- Push to `main`, merge a Pull Request or force-push.
 - Use `@Autowired` fields, `System.out`, string-concatenated SQL, `@Data` on entities.

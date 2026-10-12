@@ -1,6 +1,7 @@
 # Implementation Plan
 
-Each step is one reviewable commit. Steps are done **in order**, one at a time, following
+Each step is one branch and one Pull Request, squash-merged into `main` after review. Steps
+are done **in order**, one at a time, following
 [`CLAUDE.md`](../CLAUDE.md). Acceptance criteria are behaviours that must be proven by tests
 (unless marked *manual*). References point to [`HLD.md`](HLD.md) and
 [`DECISIONS.md`](../DECISIONS.md).
@@ -8,8 +9,10 @@ Each step is one reviewable commit. Steps are done **in order**, one at a time, 
 **Prompt to start a step:**
 
 > Read `CLAUDE.md`, `docs/HLD.md`, `DECISIONS.md` and `docs/PLAN.md`. Implement **Step N**
-> only. Restate its scope and acceptance criteria first and ask if anything is unclear. When
-> `./mvnw spotless:apply verify` is green, stop and report — do not commit until I approve.
+> only, on its own branch from an up-to-date `main`. Restate its scope and acceptance criteria
+> first and ask if anything is unclear. When `./mvnw spotless:apply verify` is green, commit,
+> push and open the Pull Request as described in `CLAUDE.md`, then stop and send me the link.
+> Do not merge.
 
 ## Default configuration values
 
@@ -40,7 +43,9 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
   graceful shutdown. Profiles `local` and `test`.
 - Multi-stage `Dockerfile` (JDK build → JRE runtime, non-root user).
 - `docker-compose.yml` with PostgreSQL 18 only (the full stack comes in Step 7).
-- GitHub Actions workflow running `./mvnw verify`.
+- GitHub Actions workflow running `./mvnw verify` on pushes and Pull Requests.
+- `.github/pull_request_template.md` with the sections listed in `CLAUDE.md` (Summary,
+  Decisions and invariants, Acceptance criteria, Review notes).
 - README skeleton: prerequisites (Java 21, Docker Desktop), how to run tests on Windows
   (`mvnw.cmd`) and macOS/Linux (`./mvnw`).
 
