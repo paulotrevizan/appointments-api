@@ -1,0 +1,119 @@
+# CLAUDE.md — working rules for this repository
+
+Appointments API: patients book medical appointments; the service assigns a doctor and a
+room without overbooking, then updates external systems and emails the patient.
+
+**Read before any change:**
+- [`docs/HLD.md`](docs/HLD.md) — invariants (I1–I5), assumptions, flows, API contracts, data model.
+- [`DECISIONS.md`](DECISIONS.md) — every accepted decision (D-001…). Code must follow them.
+- [`docs/PLAN.md`](docs/PLAN.md) — implementation steps and their acceptance criteria.
+
+The invariants in `docs/HLD.md` §2 are non-negotiable. If a task seems to require breaking
+one, or changing a decision, **stop and ask** — never change a decision silently. New
+decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
+
+## Workflow
+
+1. Work on **one step of `docs/PLAN.md` at a time**, only when asked.
+2. Before coding, restate the step's scope and acceptance criteria in a few lines. If anything
+   is ambiguous, ask before writing code.
+3. Implement, then run `./mvnw spotless:apply verify` until it is green.
+4. Stop and report: what changed (files), how each acceptance criterion is covered (test
+   names), anything deferred or questionable.
+5. **Do not commit until the user has reviewed and approved the step.** Then commit with
+   Conventional Commits (`feat:`, `fix:`, `test:`, `refactor:`, `docs:`, `build:`, `chore:`),
+   one commit per step unless asked otherwise.
+6. Never start the next step on your own.
+
+## Stack
+
+- Java 21 (virtual threads enabled), Maven Wrapper, Spring Boot 4.1.x (latest stable).
+- PostgreSQL 18, Flyway, Spring Data JPA (Hibernate).
+- Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, `RestClient`, Actuator + Micrometer.
+- Lombok (restricted, see below). Datafaker for the local data seeder only (D-024).
+- Tests: JUnit 5, AssertJ, Testcontainers (PostgreSQL), WireMock, GreenMail, Awaitility.
+- Spotless + google-java-format. GitHub Actions CI.
+- Use versions managed by the Spring Boot BOM; pin anything outside it explicitly.
+- **No other library without asking first.**
+
+## Architecture
+
+Layered, packaged by feature (D-021). Maven coordinates `pt.paulotrevizan:appointments-api`; base package `pt.paulotrevizan.appointments`.
+
+```
+booking/      controller + request/response records + controller-level error mapping,
+              BookingService, AllocationPolicy, repositories, entities, domain exceptions
+admin/        AdminAppointmentController + DTOs, AdminAppointmentService, CursorCodec
+postbooking/  OutboxWorker, OutboxTask entity + repository, task handlers, RetryPolicy
+integration/  calendar/, room/, email/ — one port interface + one adapter each
+common/       ProblemDetail handler, security config, Clock bean, shared config
+```
+
+- Controller → Service → Repository. **Controllers never call repositories.**
+- Controllers are thin: validate the request shape, call one service method, map the result.
+- Business rules live in `@Service` classes: stateless, small focused methods, unit-testable.
+- Repositories are simple: queries only, no business logic.
+- Interfaces **only** for the three external systems (`DoctorCalendarGateway`,
+  `RoomReservationGateway`, `EmailSender`). No interface-per-service.
+- DTOs are Java `records`, mapped manually (static `from(...)` factory on the response record
+  or a small mapper class next to the controller). No MapStruct, no Spring Data projections.
+
+## Coding rules
+
+- Constructor injection for every dependency, fields `private final`. **Never `@Autowired`**
+  on fields or setters. Use Lombok `@RequiredArgsConstructor`.
+- Lombok allowed: `@RequiredArgsConstructor`, `@Slf4j`, and on JPA entities only `@Getter` +
+  `@NoArgsConstructor(access = AccessLevel.PROTECTED)`. **Not allowed:** `@Data`, `@Setter`,
+  `@Builder`, `@EqualsAndHashCode`, `@ToString` on entities.
+- Entities change state through intention-revealing methods (`markDone()`, `scheduleRetry(...)`),
+  not setters.
+- KISS first: short, readable code over clever abstractions. DRY with restraint — a little
+  duplication beats the wrong abstraction.
+- Small focused functions, clear names, no comments that restate the code.
+- Explicit error handling: one domain exception per error `code` in the HLD contract, mapped to
+  RFC 9457 `ProblemDetail` in a single `@RestControllerAdvice`. Never swallow exceptions.
+- Time: inject `java.time.Clock` (UTC); never call `Instant.now()` / `LocalDateTime.now()`
+  directly. All timestamps are `Instant` / `timestamptz` (UTC).
+- Configuration in `application.yaml` (+ `application-local.yaml`, `application-test.yaml`);
+  no `.properties`. Typed `@ConfigurationProperties` records for custom settings. Secrets via
+  environment variables; local defaults only in `application-local.yaml`.
+- Logging with SLF4J only. **No `System.out` / `printStackTrace`.** Log ids only — never patient
+  names, emails, phones or specialties (health data).
+
+## Persistence rules (D-020)
+
+- Flyway owns the schema (`db/migration`, schema only — no sample data).
+  `spring.jpa.hibernate.ddl-auto: validate`. Never edit an applied migration.
+- Local sample data comes from `LocalDataSeeder` (`@Profile("local")`, runs at startup, only when
+  the reference tables are empty, D-024).
+- `spring.jpa.open-in-view: false`. Associations `LAZY`, unidirectional, no cascades unless
+  required. Use fetch joins (`JOIN FETCH`) when a response needs related data — no N+1.
+- Queries are always parameterized: Spring Data methods, `@Query` with named parameters, or
+  `NamedParameterJdbcTemplate`. **Never build SQL by string concatenation.**
+- Native SQL only for PostgreSQL-specific needs (outbox claim with `FOR UPDATE SKIP LOCKED`,
+  range operators). The generated `slot` column is not mapped in the entity.
+- Constraint names are explicit in migrations (`appointment_doctor_no_overlap`,
+  `appointment_room_no_overlap`, `appointment_patient_no_overlap`) and mapped to domain outcomes
+  by name.
+- Retry loops (allocation retries, D-003) run **outside** the transaction: one transaction per
+  attempt via `TransactionTemplate`; use `saveAndFlush` so constraint violations surface inside
+  the attempt. Never rely on calling a `@Transactional` method through `this`.
+
+## Testing rules (D-022)
+
+- Test **behaviour, not implementation**: assert on HTTP responses, database state, outgoing
+  calls and emails — not on private methods, getters or mocks of our own classes.
+- Unit tests for pure logic; integration tests through the HTTP API with Testcontainers
+  PostgreSQL, WireMock and GreenMail. Mock only external boundaries.
+- Naming: `givenX_whenY_thenZ` plus `@DisplayName` in plain English. Reference the invariant or
+  decision when a test proves one (e.g. `@DisplayName("I1: a doctor is never double-booked")`).
+- Async behaviour with Awaitility — never `Thread.sleep`.
+- Each test sets up its own data; never rely on seeded data; no ordering dependencies between tests.
+
+## Never
+
+- Change an invariant, contract or decision without asking.
+- Add endpoints, fields or features that are not in `docs/HLD.md`.
+- Add dependencies without asking.
+- Commit before the user approves the step.
+- Use `@Autowired` fields, `System.out`, string-concatenated SQL, `@Data` on entities.
