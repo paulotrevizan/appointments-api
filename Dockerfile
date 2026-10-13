@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 WORKDIR /workspace
 COPY .mvn .mvn
 COPY mvnw pom.xml ./
@@ -10,7 +10,7 @@ COPY src src
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -ntp -DskipTests package \
     && java -Djarmode=tools -jar target/appointments-api-*.jar extract --layers --launcher --destination extracted
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 WORKDIR /app
 COPY --from=build /workspace/extracted/dependencies/ ./
