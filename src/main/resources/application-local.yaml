@@ -5,6 +5,9 @@ spring:
     password: appointments
 
 appointments:
+  security:
+    booking-client-password: booking-local
+    admin-password: admin-local
   seed:
     min-doctors-per-specialty: 3
     max-doctors-per-specialty: 5

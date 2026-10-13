@@ -23,3 +23,10 @@ management:
     web:
       exposure:
         include: health
+
+appointments:
+  booking:
+    slot-duration: 30m
+  security:
+    booking-client-password: ${BOOKING_CLIENT_PASSWORD}
+    admin-password: ${ADMIN_PASSWORD}
