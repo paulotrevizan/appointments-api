@@ -126,9 +126,10 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 ## Step 3 — Concurrency and duplicate protection
 
 **Scope**
-- Allocation retry loop (D-003) outside the transaction: one `TransactionTemplate`
+- Allocation retry loop (D-027) outside the transaction: one `TransactionTemplate`
   transaction per attempt, `saveAndFlush`, constraint name → outcome mapping.
-- Duplicate handling (D-011): pre-check + `appointment_patient_no_overlap` → re-check.
+- Slot-scoped locks for doctor and room, patient row lock, duplicate check inside the attempt
+  (D-011, D-027); the exclusion constraints stay as the safety net.
 
 **Acceptance criteria**
 - Same patient + slot + specialty again → **200** with the same appointment body; still one

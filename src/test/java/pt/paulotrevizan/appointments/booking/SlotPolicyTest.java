@@ -16,7 +16,7 @@ class SlotPolicyTest {
 
   private final SlotPolicy policy =
       new SlotPolicy(
-          new BookingProperties(Duration.ofMinutes(30)), Clock.fixed(NOW, ZoneOffset.UTC));
+          new BookingProperties(Duration.ofMinutes(30), 3), Clock.fixed(NOW, ZoneOffset.UTC));
 
   @Test
   @DisplayName("D-007: a future slot on the grid is accepted")

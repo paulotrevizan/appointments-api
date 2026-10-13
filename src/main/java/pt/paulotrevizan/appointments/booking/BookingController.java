@@ -18,8 +18,9 @@ class BookingController {
 
   @PostMapping
   ResponseEntity<AppointmentResponse> book(@Valid @RequestBody BookAppointmentRequest request) {
-    Appointment appointment =
+    BookingResult result =
         bookingService.book(request.patientId(), request.specialty(), request.startAt());
-    return ResponseEntity.status(HttpStatus.CREATED).body(AppointmentResponse.from(appointment));
+    HttpStatus status = result.created() ? HttpStatus.CREATED : HttpStatus.OK;
+    return ResponseEntity.status(status).body(AppointmentResponse.from(result.appointment()));
   }
 }

@@ -131,7 +131,8 @@ class AppointmentOverlapTest {
 
   private Appointment book(Patient patient, Doctor doctor, Room room, Instant startAt) {
     return appointments.saveAndFlush(
-        new Appointment(patient, specialty, doctor, room, startAt, SLOT, clock.instant()));
+        new Appointment(
+            patient, specialty, doctor, room, startAt, startAt.plus(SLOT), clock.instant()));
   }
 
   private Patient newPatient() {

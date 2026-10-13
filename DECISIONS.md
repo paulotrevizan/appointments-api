@@ -8,7 +8,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 |----|----------|--------|------|
 | D-001 | Our service is the source of truth; return 201 and propagate via outbox | Accepted | 2026-10-12 |
 | D-002 | Prevent overbooking with PostgreSQL exclusion constraints | Accepted | 2026-10-12 |
-| D-003 | Optimistic allocation with bounded retry on conflict | Accepted | 2026-10-12 |
+| D-003 | Optimistic allocation with bounded retry on conflict | Superseded by D-027 | 2026-10-12 |
 | D-004 | Transactional outbox, one task per post-booking action | Accepted | 2026-10-12 |
 | D-005 | Retry lives in the outbox; adapters use timeouts; no circuit breaker | Accepted | 2026-10-12 |
 | D-006 | External systems: ports + production-style adapters, simulated locally | Accepted | 2026-10-12 |
@@ -32,6 +32,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
 | D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
+| D-027 | Slot-scoped locks for allocation, constraints as the safety net, bounded retry | Accepted | 2026-10-13 |
 
 ---
 
@@ -260,3 +261,20 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Decision:** B. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. The document is generated from the code; the only hand-written parts are the Basic scheme and a request example, in `OpenApiConfig`.
 - **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, no annotations in controllers or DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; error codes are not in the generated document (they are in the README).
 - **Revisit when:** the API needs richer documentation (error responses, descriptions) — add annotations or a separate OpenAPI file.
+
+## D-027 — Slot-scoped locks for allocation, constraints as the safety net, bounded retry
+
+- **Context:** D-003 chose purely optimistic allocation: pick candidates, insert, on exclusion violation try again. Tested under 20 parallel requests for one slot, it fails: PostgreSQL inserts the index entry of an exclusion constraint and checks for conflicts afterwards, so two concurrent inserts that conflict see each other's uncommitted entry and wait for each other. One is aborted by the deadlock detector after `deadlock_timeout` (1 s) with `deadlock detected` instead of an exclusion violation. Retrying on that error works but costs a second per deadlock, and 3 attempts can run out for requests that should have succeeded (for example 10 identical requests of one patient not all returning 200/201).
+- **Options:**
+  - A) Optimistic with retry on deadlock too (D-003 plus jitter).
+  - B) Lock rows with `FOR UPDATE SKIP LOCKED` on the candidate doctor and room.
+  - C) Transaction-scoped locks per (resource, slot) tried without waiting, a row lock on the patient, constraints as the safety net, bounded retry for what slips through.
+- **Decision:** C.
+  - Each attempt runs in its own transaction (`TransactionTemplate`), outside the retry loop, max `appointments.booking.max-attempts` (default 3).
+  - First the patient row is locked (`SELECT … FOR UPDATE`): requests of the same patient run one after the other, and the second one finds the first appointment (duplicate protection, D-011).
+  - Doctor and room are the first free candidates whose advisory lock (`pg_try_advisory_xact_lock`, key = resource + id + slot start) is available. The lock never waits, so concurrent requests for one slot take different candidates and nobody waits for anybody: no deadlocks. A candidate locked by another request is skipped; if none is left the answer is `NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE`.
+  - The exclusion constraints (I1, I2, I5) stay the guarantee. If one still fires (a booking committed after the candidates were read), a new attempt re-reads them, up to the maximum, and the last conflict becomes the 409.
+- **Trade-offs:** ➕ deterministic outcomes (`min(doctors, rooms)` bookings for one slot, every identical request 200/201), no deadlock waits, correctness still rests on the database. ➖ a request can get 409 while another request holds the last candidate and later fails (rare, the client may retry); locks are PostgreSQL-specific; a little more code than D-003.
+- **Why not B:** a row lock on the doctor is not slot-scoped, so a request for 15:00 would skip a doctor being booked for 14:00 and report no doctor available when they are the only one.
+- **Why not A:** latency and the unreliable outcome described above.
+- **Revisit when:** the number of doctors or rooms per slot makes scanning the candidate list per request expensive.

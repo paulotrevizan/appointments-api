@@ -102,7 +102,7 @@ common/       ProblemDetail handler, security config, Clock bean, shared config
 - Constraint names are explicit in migrations (`appointment_doctor_no_overlap`,
   `appointment_room_no_overlap`, `appointment_patient_no_overlap`) and mapped to domain outcomes
   by name.
-- Retry loops (allocation retries, D-003) run **outside** the transaction: one transaction per
+- Retry loops (allocation retries, D-027) run **outside** the transaction: one transaction per
   attempt via `TransactionTemplate`; use `saveAndFlush` so constraint violations surface inside
   the attempt. Never rely on calling a `@Transactional` method through `this`.
 

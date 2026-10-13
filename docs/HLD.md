@@ -77,7 +77,7 @@ Single deployable Spring Boot service (modular monolith) + PostgreSQL. No messag
 | Component | Responsibility |
 |-----------|----------------|
 | REST API | Validation, auth (roles), HTTP ↔ domain mapping, problem+json errors |
-| Booking Service | Patient/specialty lookup, duplicate check (patient + slot), orchestrates allocation, persists appointment + outbox in one transaction, retries on constraint violation |
+| Booking Service | Specialty lookup, orchestrates the booking attempts (one transaction each, retried on constraint violation): patient lock, duplicate check, allocation, appointment + outbox in one transaction |
 | Allocation Policy | Chooses candidates. Doctor: least booked that day (tie → id). Room: first free. A single concrete class — replaced, not abstracted, if a new policy is needed |
 | Outbox Worker | Polls due tasks, claims them safely across instances, dispatches to the right adapter, applies backoff, marks `DONE` / `FAILED` |
 | Adapters | One per external system, behind a domain port. Timeouts. Send appointment id as idempotency key |
@@ -87,20 +87,22 @@ Single deployable Spring Boot service (modular monolith) + PostgreSQL. No messag
 
 ### 6.1 Create appointment (synchronous)
 
-1. Validate: future time, aligned to the 30-min grid, patient exists,
-   specialty exists (local lookups, same database — no extra network round trip).
-2. Duplicate check — does the patient already have a confirmed appointment at that slot?
-   - same specialty → it is a retry: return the existing appointment (**200**);
-   - different specialty → **409** `PATIENT_ALREADY_BOOKED`.
-3. Query candidate doctors (specialty, active, no overlapping appointment) ordered by load
-   that day, and candidate rooms (active, no overlap).
-4. In **one transaction**: `INSERT appointment` (first doctor, first room) + `INSERT` 3
-   `outbox_task` rows → `COMMIT`.
-5. If PostgreSQL rejects with an exclusion violation:
-   - on doctor or room (another request won the race) → drop that candidate and retry with
-     the next one (**max 3 attempts**);
-   - on patient (two concurrent retries of the same request) → apply step 2 again.
-6. No candidates left → **409** (`NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE`).
+1. Validate: future time, aligned to the 30-min grid, specialty exists (local lookup, same
+   database — no extra network round trip).
+2. **Attempt**, in one transaction (max **3 attempts**, D-027):
+   1. Lock the patient row (`SELECT … FOR UPDATE`), so concurrent requests of the same patient
+      run one after the other; unknown patient → **404**.
+   2. Duplicate check — does the patient already have a confirmed appointment at that slot?
+      - same specialty → it is a retry: return the existing appointment (**200**);
+      - different specialty → **409** `PATIENT_ALREADY_BOOKED`.
+   3. Query candidate doctors (specialty, active, no overlapping appointment) ordered by load
+      that day, and candidate rooms (active, no overlap). Take the first doctor and the first
+      room whose slot lock (`pg_try_advisory_xact_lock` on resource + slot) is free. The lock
+      never waits, so concurrent requests for the same slot get different candidates.
+   4. `INSERT appointment` + `INSERT` 3 `outbox_task` rows → `COMMIT` (locks are released).
+3. If PostgreSQL still rejects with an exclusion violation (a booking committed after the
+   candidates were read — rare), start a new attempt.
+4. No candidate left → **409** (`NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE`).
    Success → **201** with the full appointment: doctor, room **and patient details**, so the
    client never needs a follow-up call.
 
@@ -332,8 +334,8 @@ Notes:
 |------------|------|--------------|----------------|
 | Instance crashes | Before commit | Nothing persisted; client retry books normally | I1, I2, I4, I5 |
 | Instance crashes | After commit, before response | Booking + outbox exist; client retry gets **200** with the same appointment | I5, I4 |
-| Two identical requests | Concurrently | One gets 201, the other hits I5 → re-check → 200 | I5 |
-| Many requests, same slot | Concurrently | Constraint rejects losers → next candidate (max 3) → 201 or 409 | I1, I2 |
+| Two identical requests | Concurrently | The second waits for the patient lock, finds the first appointment → 200 | I5 |
+| Many requests, same slot | Concurrently | Slot locks give each request a different doctor and room; requests left without a free one get 409; the constraints reject anything that slips through (new attempt, max 3) | I1, I2 |
 | Worker crashes | During an external call | Lease expires → task claimed again → external dedups by appointment id | I4 |
 | External system down | For hours | Tasks back off; booking keeps working; after N attempts `FAILED` + alert | I4 (nothing lost) |
 | External rejects (4xx) | Any time | Non-retryable → `FAILED` immediately + alert → manual reconciliation | I4 (visible, not silent) |

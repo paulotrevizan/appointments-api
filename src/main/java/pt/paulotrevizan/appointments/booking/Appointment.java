@@ -7,7 +7,6 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -53,7 +52,7 @@ public class Appointment extends BaseEntity {
       Doctor doctor,
       Room room,
       Instant startAt,
-      Duration duration,
+      Instant endAt,
       Instant now) {
     this.id = UUID.randomUUID();
     this.patient = patient;
@@ -61,7 +60,7 @@ public class Appointment extends BaseEntity {
     this.doctor = doctor;
     this.room = room;
     this.startAt = startAt;
-    this.endAt = startAt.plus(duration);
+    this.endAt = endAt;
     this.status = AppointmentStatus.CONFIRMED;
     this.createdAt = now;
     this.updatedAt = now;
