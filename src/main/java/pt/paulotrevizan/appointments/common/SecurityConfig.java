@@ -23,26 +23,33 @@ class SecurityConfig {
 
   private static final String BOOKING_CLIENT = "BOOKING_CLIENT";
   private static final String ADMIN = "ADMIN";
+  private static final String[] API_DOCS_PATHS = {
+    "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**"
+  };
 
   @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
+      SecurityProperties properties,
       @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver)
       throws Exception {
     return http.csrf(AbstractHttpConfigurer::disable)
         .sessionManagement(
             session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
-            requests ->
-                requests
-                    .requestMatchers("/actuator/health/**")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/appointments")
-                    .hasRole(BOOKING_CLIENT)
-                    .requestMatchers("/api/v1/admin/**")
-                    .hasRole(ADMIN)
-                    .anyRequest()
-                    .authenticated())
+            requests -> {
+              requests.requestMatchers("/actuator/health/**").permitAll();
+              if (properties.publicApiDocs()) {
+                requests.requestMatchers(API_DOCS_PATHS).permitAll();
+              }
+              requests
+                  .requestMatchers(HttpMethod.POST, "/api/v1/appointments")
+                  .hasRole(BOOKING_CLIENT)
+                  .requestMatchers("/api/v1/admin/**")
+                  .hasRole(ADMIN)
+                  .anyRequest()
+                  .authenticated();
+            })
         .httpBasic(
             basic ->
                 basic.authenticationEntryPoint(

@@ -94,10 +94,10 @@ volume).
 
 ### Swagger UI
 
-Open <http://localhost:8080/swagger-ui.html>. The browser asks for a user and password (use
-`booking-client` / `booking-local`). Then open *POST /api/v1/appointments* → *Try it out* → *Execute*. If
-you want Swagger UI to send the credentials itself, use the *Authorize* button.
-The OpenAPI document is at `http://localhost:8080/v3/api-docs` (D-026). Both require authentication.
+Open <http://localhost:8080/swagger-ui.html>. In the `local` profile the page opens without login:
+click **Authorize**, enter `booking-client` / `booking-local`, then open *POST /api/v1/appointments* →
+*Try it out* → *Execute*. The OpenAPI document is at `http://localhost:8080/v3/api-docs` (D-026).
+In other profiles both require HTTP Basic credentials, and the browser asks for them.
 
 ### IntelliJ HTTP Client
 

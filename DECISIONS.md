@@ -31,7 +31,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI | Accepted (OpenAPI UI part superseded by D-026) | 2026-10-12 |
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
-| D-026 | OpenAPI document and Swagger UI with springdoc, behind authentication | Accepted | 2026-10-13 |
+| D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
 
 ---
 
@@ -251,12 +251,12 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Why not B:** it removes `BaseEntity` but moves the demo patients out of the entity model into hand-written SQL.
 - **Revisit when:** insert rate or table size makes index locality matter — switch to time-ordered UUID v7; the column type does not change.
 
-## D-026 — OpenAPI document and Swagger UI with springdoc, behind authentication
+## D-026 — OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere
 
 - **Context:** D-023 chose README + `api.http` and no OpenAPI UI. Trying the endpoints by hand is easier with an interactive UI, and the contract (request, responses, error codes) is then generated from the code instead of only written in prose.
 - **Options:**
   - A) Keep D-023: README + `api.http` only.
   - B) Add `springdoc-openapi` (Swagger UI + `/v3/api-docs`), keep README and `api.http`.
-- **Decision:** B, supersedes the "no OpenAPI UI" part of D-023. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI are active in every profile but require authentication like any other endpoint (any role): they describe a health-data API, so they are not public. Request fields and responses are described with `io.swagger.v3` annotations on the DTOs and controllers.
+- **Decision:** B, supersedes the "no OpenAPI UI" part of D-023. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. Request fields and responses are described with `io.swagger.v3` annotations on the DTOs and controllers.
 - **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, examples stay close to the DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; annotations add noise to controllers and DTOs.
 - **Revisit when:** the API grows enough that annotations hide the logic — then move descriptions to a separate OpenAPI file.
