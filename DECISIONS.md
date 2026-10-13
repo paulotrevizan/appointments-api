@@ -28,9 +28,10 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-020 | Spring Data JPA, native SQL only where PostgreSQL features are needed | Accepted | 2026-10-12 |
 | D-021 | Layered architecture, packaged by feature; interfaces only at external boundaries | Accepted | 2026-10-12 |
 | D-022 | Behaviour-based tests against real infrastructure | Accepted | 2026-10-12 |
-| D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI | Accepted | 2026-10-12 |
+| D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI | Accepted (OpenAPI UI part superseded by D-026) | 2026-10-12 |
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
+| D-026 | OpenAPI document and Swagger UI with springdoc, behind authentication | Accepted | 2026-10-13 |
 
 ---
 
@@ -249,3 +250,13 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Trade-offs:** ➕ stable ids for demo data and tests, id known before the insert, no extra `SELECT` per save. ➖ one base class; random UUIDs (v4) are 16 bytes and insert at random positions of the primary key index, which hurts locality on very large tables — irrelevant at ~1 req/s.
 - **Why not B:** it removes `BaseEntity` but moves the demo patients out of the entity model into hand-written SQL.
 - **Revisit when:** insert rate or table size makes index locality matter — switch to time-ordered UUID v7; the column type does not change.
+
+## D-026 — OpenAPI document and Swagger UI with springdoc, behind authentication
+
+- **Context:** D-023 chose README + `api.http` and no OpenAPI UI. Trying the endpoints by hand is easier with an interactive UI, and the contract (request, responses, error codes) is then generated from the code instead of only written in prose.
+- **Options:**
+  - A) Keep D-023: README + `api.http` only.
+  - B) Add `springdoc-openapi` (Swagger UI + `/v3/api-docs`), keep README and `api.http`.
+- **Decision:** B, supersedes the "no OpenAPI UI" part of D-023. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI are active in every profile but require authentication like any other endpoint (any role): they describe a health-data API, so they are not public. Request fields and responses are described with `io.swagger.v3` annotations on the DTOs and controllers.
+- **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, examples stay close to the DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; annotations add noise to controllers and DTOs.
+- **Revisit when:** the API grows enough that annotations hide the logic — then move descriptions to a separate OpenAPI file.

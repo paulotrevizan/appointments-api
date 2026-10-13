@@ -37,6 +37,7 @@ decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
 - PostgreSQL 18, Flyway, Spring Data JPA (Hibernate).
 - Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, `RestClient`, Actuator + Micrometer.
 - Lombok (restricted, see below). Datafaker for the local data seeder only (D-024).
+- springdoc-openapi for the OpenAPI document and Swagger UI (D-026).
 - Tests: JUnit 5, AssertJ, Testcontainers (PostgreSQL), WireMock, GreenMail, Awaitility.
 - Spotless + google-java-format. GitHub Actions CI.
 - Use versions managed by the Spring Boot BOM; pin anything outside it explicitly.
