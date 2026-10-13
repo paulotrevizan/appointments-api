@@ -1,9 +1,7 @@
 package pt.paulotrevizan.appointments.common.web;
 
-import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
-@Getter
 public abstract class ApiException extends RuntimeException {
 
   private final HttpStatus status;
@@ -13,5 +11,13 @@ public abstract class ApiException extends RuntimeException {
     super(detail);
     this.status = status;
     this.code = code;
+  }
+
+  public HttpStatus getStatus() {
+    return status;
+  }
+
+  public String getCode() {
+    return code;
   }
 }

@@ -73,12 +73,13 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Decision:** A, with **three independent tasks** (calendar, room, email) per appointment.
 - **Trade-offs:** ➕ atomic with the booking, survives restarts, no extra infrastructure, per-action status visible. ➖ polling latency (seconds), table needs cleanup over time.
 - **Why not B:** events are lost if the instance crashes. **Why not C:** extra infrastructure not justified by the load; a natural evolution when other services need the events.
-- **Detail:** claim with `FOR UPDATE SKIP LOCKED` + lease (`locked_until`) so multiple instances never process the same task and no transaction is held during external calls.
+- **Detail:** claim with `FOR UPDATE SKIP LOCKED` + lease (`locked_until`) so multiple instances never process the same task and no transaction is held during external calls. The claim is one statement that also returns the appointment data the calendar and room calls need. Every time (`next_attempt_at`, `locked_until`, `updated_at`) comes from the database clock. A claimed batch runs in parallel, one virtual thread per task, so one slow system does not delay the others. Only task types with a handler are claimed. The worker can be switched off with `appointments.outbox.worker.enabled` (off in the `test` profile, so booking tests never call external systems).
 
 ## D-005 — Retry lives in the outbox; adapters use timeouts; no circuit breaker
 
 - **Context:** Are retry and circuit breaker enough to deal with unavailable external systems?
-- **Decision:** No — durability comes from the outbox (D-004). Retries are scheduled by the outbox with exponential backoff + jitter; after N attempts the task is `FAILED` and alerts. Adapters apply timeouts only.
+- **Decision:** No — durability comes from the outbox (D-004). Retries are scheduled by the outbox with exponential backoff + jitter; after N attempts the task is `FAILED` and alerts. Adapters apply timeouts only (`spring.http.clients.connect-timeout` / `read-timeout`) and speak HTTP/1.1. On plain `http://` the JDK client would otherwise try an h2c upgrade, which many servers and proxies cancel.
+  - The delay must survive restarts, so it is persisted as `next_attempt_at` instead of an in-memory `@Retryable`. Its value comes from Spring's `ExponentialBackOff`: 5 s × 2 per attempt, capped at 10 min. Its jitter grows with the interval, which gives the ±20 %.
 - **Why no circuit breaker:** the booking path never calls externals, so there is no user-facing latency to protect; the outbox backoff already stops hammering a failing system. At ~1 req/s a breaker adds a dependency and configuration without measurable benefit.
 - **Trade-offs:** ➕ a single place that controls retries (no retry storms from stacked layers), fewer moving parts, predictable behaviour. ➖ during a long outage each due task still makes one (timed-out) call per backoff step.
 - **Revisit when:** post-booking volume grows enough that failing calls consume worker capacity.

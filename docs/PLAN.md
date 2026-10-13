@@ -181,7 +181,8 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 **Scope**
 - `EmailSender` port + SMTP adapter (`JavaMailSender`). Plain-text body: date/time (UTC),
   doctor name, room. **No specialty** (health data, HLD §8).
-- Email task handler loads appointment, patient, doctor and room at execution time.
+- Email task handler loads appointment, patient, doctor and room at execution time; `EMAIL` is
+  added to the task types the worker claims (until then those tasks stay `PENDING`).
 - SMTP transient vs permanent failure classification.
 
 **Acceptance criteria** (GreenMail)

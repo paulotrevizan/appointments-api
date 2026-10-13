@@ -122,6 +122,9 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
   **outside** the transaction: one transaction per attempt via `TransactionTemplate`; use
   `saveAndFlush` so constraint violations surface inside the attempt (D-003). Never rely on
   calling a `@Transactional` method through `this`.
+- Outbox retries are persisted, not in memory: the delay comes from Spring's `ExponentialBackOff`
+  and is stored as `next_attempt_at` with the database clock (D-005). Outbox state changes are
+  single SQL statements in `OutboxTaskQueue` for that reason.
 - No pessimistic, advisory or `SERIALIZABLE` locking for bookings: the slot invariants are unique
   indexes and conflicts are retried (D-002, D-003).
 

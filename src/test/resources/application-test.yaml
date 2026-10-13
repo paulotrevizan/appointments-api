@@ -6,3 +6,9 @@ appointments:
   security:
     booking-client-password: booking-test
     admin-password: admin-test
+  outbox:
+    worker:
+      enabled: false
+  integration:
+    calendar-base-url: http://localhost:9
+    room-base-url: http://localhost:9

@@ -61,6 +61,12 @@ The `local` profile connects to the Docker database, creates random sample data 
 (doctors, rooms, patients — see D-024) and defines the credentials below. Health check:
 `GET http://localhost:8080/actuator/health`.
 
+After each booking the outbox worker calls the doctor calendar and room reservation systems
+(HLD §6.2). The `local` profile points both at `http://localhost:8089`; until the simulated systems
+are part of Docker Compose (Step 7), those calls fail, are retried with backoff and end `FAILED`. The
+booking itself is not affected (D-001). Outside the `local` profile set `CALENDAR_BASE_URL` and
+`ROOM_BASE_URL`.
+
 ## Calling the API
 
 ### Authentication: there is no token
