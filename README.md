@@ -10,7 +10,7 @@ Implementation plan: [docs/PLAN.md](docs/PLAN.md)
 
 ## Prerequisites
 
-- Java 21 (`JAVA_HOME` pointing to a JDK 21)
+- Java 25 (`JAVA_HOME` pointing to a JDK 25)
 - Docker Desktop (running) — the tests use Testcontainers, and the local database runs in Docker
 
 Maven is not required: the project ships with the Maven Wrapper.
@@ -48,7 +48,7 @@ Windows (PowerShell or cmd):
 
    or from **IntelliJ IDEA**:
 
-   1. Open the project as a Maven project and make sure the project SDK is JDK 21
+   1. Open the project as a Maven project and make sure the project SDK is JDK 25
       (File → Project Structure → Project).
    2. Open `AppointmentsApiApplication` and click the green arrow next to `main` → *Modify Run
       Configuration…* (or Run → Edit Configurations → + → Spring Boot).

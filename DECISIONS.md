@@ -23,7 +23,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-015 | API surface limited to the stated FRs | Accepted | 2026-10-12 |
 | D-016 | Keyset (cursor) pagination for the admin listing | Accepted | 2026-10-12 |
 | D-017 | Classify post-booking failures: retryable vs non-retryable | Accepted | 2026-10-12 |
-| D-018 | Java 21 with virtual threads enabled | Accepted | 2026-10-12 |
+| D-018 | Java 25 with virtual threads enabled | Accepted | 2026-10-12 |
 | D-019 | Maven, Spring Boot 4.1, PostgreSQL 18 | Accepted | 2026-10-12 |
 | D-020 | Spring Data JPA, native SQL only where PostgreSQL features are needed | Accepted | 2026-10-12 |
 | D-021 | Layered architecture, packaged by feature; interfaces only at external boundaries | Accepted | 2026-10-12 |
@@ -187,12 +187,12 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
   - Non-retryable: any other HTTP 4xx, permanent SMTP errors → `FAILED` immediately + alert.
 - **Trade-offs:** ➕ fast, clear signal for business rejections; no wasted calls. ➖ a misclassified error (e.g. an external returning 400 during an outage) fails early — re-drive is a one-line runbook step.
 
-## D-018 — Java 21 with virtual threads enabled
+## D-018 — Java 25 with virtual threads enabled
 
-- **Context:** Java 17 or 21; the service does blocking I/O (JDBC, HTTP, SMTP).
-- **Decision:** Java 21 (LTS) with `spring.threads.virtual.enabled: true`.
-- **Trade-offs:** ➕ records, pattern matching, sequenced collections; blocking I/O no longer ties up platform threads, so request handling and the outbox worker scale without thread-pool tuning. ➖ on Java 21, `synchronized` blocks pin a virtual thread to its carrier (fixed in JDK 24); the DB connection pool, not threads, becomes the concurrency limit — which is the desired back-pressure.
-- **Mitigation:** integration tests run with `-Djdk.tracePinnedThreads=short` to surface pinning.
+- **Context:** The service does blocking I/O (JDBC, HTTP, SMTP) and relies on virtual threads for it.
+- **Decision:** Java 25 (LTS) with `spring.threads.virtual.enabled: true`.
+- **Trade-offs:** ➕ records, pattern matching, sequenced collections; blocking I/O no longer ties up platform threads, so request handling and the outbox worker scale without thread-pool tuning; since JDK 24 (JEP 491) a virtual thread that blocks inside `synchronized` no longer pins its carrier thread, so libraries that use monitors (JDBC driver, Hibernate, Spring internals) need no special care. ➖ the DB connection pool, not threads, becomes the concurrency limit — which is the desired back-pressure.
+- **Why not Java 21:** on 21, blocking inside `synchronized` pins the carrier thread. Under the concurrency tests of Step 3 this showed up in Spring internals (a cache filled with `ConcurrentHashMap.computeIfAbsent`), and the diagnostic flag `-Djdk.tracePinnedThreads` hung the test JVM intermittently. Java 25 removes the problem instead of working around it.
 
 ## D-019 — Maven, Spring Boot 4.1, PostgreSQL 18
 

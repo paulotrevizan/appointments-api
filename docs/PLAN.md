@@ -34,7 +34,7 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 ## Step 0 — Scaffold and tooling
 
 **Scope**
-- Generate the project from start.spring.io: latest stable Spring Boot 4.1.x, Java 21, Maven,
+- Generate the project from start.spring.io: latest stable Spring Boot 4.1.x, Java 25, Maven,
   dependencies: Web, Data JPA, Validation, Security, Mail, Actuator, Flyway (+ PostgreSQL
   module), PostgreSQL driver, Lombok, Testcontainers.
 - Spotless with google-java-format bound to `verify`.
@@ -46,7 +46,7 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 - GitHub Actions workflow running `./mvnw verify` on pushes and Pull Requests.
 - `.github/pull_request_template.md` with the sections listed in `CLAUDE.md` (Summary,
   Decisions and invariants, Acceptance criteria, Review notes).
-- README skeleton: prerequisites (Java 21, Docker Desktop), how to run tests on Windows
+- README skeleton: prerequisites (Java 25, Docker Desktop), how to run tests on Windows
   (`mvnw.cmd`) and macOS/Linux (`./mvnw`).
 
 **Acceptance criteria**
@@ -234,7 +234,7 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 ## Step 8 — Documentation and conformance review
 
 **Scope**
-- README: purpose, architecture summary (links to HLD/DECISIONS), prerequisites (Java 21,
+- README: purpose, architecture summary (links to HLD/DECISIONS), prerequisites (Java 25,
   Docker Desktop), run tests, run with Docker Compose and from the IDE (IntelliJ run/debug
   configuration with profile `local`), demo patient ids and credentials,
   configuration reference, runbook (inspect and re-drive `FAILED` tasks), project structure,

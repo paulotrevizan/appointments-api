@@ -33,7 +33,7 @@ decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
 
 ## Stack
 
-- Java 21 (virtual threads enabled), Maven Wrapper, Spring Boot 4.1.x (latest stable).
+- Java 25 (virtual threads enabled), Maven Wrapper, Spring Boot 4.1.x (latest stable).
 - PostgreSQL 18, Flyway, Spring Data JPA (Hibernate).
 - Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, `RestClient`, Actuator + Micrometer.
 - Lombok (restricted, see below). Datafaker for the local data seeder only (D-024).
