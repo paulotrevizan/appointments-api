@@ -2,16 +2,32 @@ package pt.paulotrevizan.appointments.booking.persistence;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
 import pt.paulotrevizan.appointments.catalog.domain.Doctor;
+import pt.paulotrevizan.appointments.catalog.domain.Patient;
 import pt.paulotrevizan.appointments.catalog.domain.Room;
 import pt.paulotrevizan.appointments.catalog.domain.Specialty;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
+
+  @Query(
+      """
+      select a from Appointment a
+        join fetch a.patient
+        join fetch a.specialty
+        join fetch a.doctor
+        join fetch a.room
+      where a.patient = :patient
+        and a.startAt = :startAt
+        and a.status = pt.paulotrevizan.appointments.booking.domain.AppointmentStatus.CONFIRMED
+      """)
+  Optional<Appointment> findConfirmed(
+      @Param("patient") Patient patient, @Param("startAt") Instant startAt);
 
   @Query(
       """

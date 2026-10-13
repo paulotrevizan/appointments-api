@@ -3,18 +3,21 @@ package pt.paulotrevizan.appointments.booking.application;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.support.TransactionTemplate;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
+import pt.paulotrevizan.appointments.booking.domain.NoDoctorAvailableException;
+import pt.paulotrevizan.appointments.booking.domain.NoRoomAvailableException;
+import pt.paulotrevizan.appointments.booking.domain.PatientAlreadyBookedException;
 import pt.paulotrevizan.appointments.booking.domain.PatientNotFoundException;
 import pt.paulotrevizan.appointments.booking.domain.SpecialtyNotFoundException;
+import pt.paulotrevizan.appointments.booking.persistence.SlotConstraint;
 import pt.paulotrevizan.appointments.catalog.domain.Patient;
 import pt.paulotrevizan.appointments.catalog.domain.Specialty;
 import pt.paulotrevizan.appointments.catalog.persistence.PatientRepository;
 import pt.paulotrevizan.appointments.catalog.persistence.SpecialtyRepository;
+import pt.paulotrevizan.appointments.common.web.ApiException;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BookingService {
@@ -23,7 +26,6 @@ public class BookingService {
   private final PatientRepository patients;
   private final SpecialtyRepository specialties;
   private final AppointmentBooker booker;
-  private final TransactionTemplate transactionTemplate;
 
   public Appointment book(UUID patientId, String specialtyCode, Instant startAt) {
     slotPolicy.validate(startAt);
@@ -33,10 +35,20 @@ public class BookingService {
         specialties
             .findByCode(specialtyCode)
             .orElseThrow(() -> new SpecialtyNotFoundException(specialtyCode));
+    try {
+      return booker.book(patient, specialty, startAt);
+    } catch (DataIntegrityViolationException e) {
+      throw slotTaken(e, specialty, startAt);
+    }
+  }
 
-    Appointment appointment =
-        transactionTemplate.execute(status -> booker.book(patient, specialty, startAt));
-    log.info("Appointment {} booked", appointment.getId());
-    return appointment;
+  private static ApiException slotTaken(
+      DataIntegrityViolationException e, Specialty specialty, Instant startAt) {
+    SlotConstraint constraint = SlotConstraint.violatedBy(e).orElseThrow(() -> e);
+    return switch (constraint) {
+      case DOCTOR -> new NoDoctorAvailableException(specialty.getCode(), startAt);
+      case ROOM -> new NoRoomAvailableException(startAt);
+      case PATIENT -> new PatientAlreadyBookedException(startAt);
+    };
   }
 }

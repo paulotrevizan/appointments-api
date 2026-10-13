@@ -7,7 +7,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | ID | Decision | Status | Date |
 |----|----------|--------|------|
 | D-001 | Our service is the source of truth; return 201 and propagate via outbox | Accepted | 2026-10-12 |
-| D-002 | Prevent overbooking with PostgreSQL exclusion constraints | Accepted | 2026-10-12 |
+| D-002 | Prevent overbooking with PostgreSQL unique indexes on fixed slots | Accepted | 2026-10-12 |
 | D-003 | Optimistic allocation with bounded retry on conflict | Accepted | 2026-10-12 |
 | D-004 | Transactional outbox, one task per post-booking action | Accepted | 2026-10-12 |
 | D-005 | Retry lives in the outbox; adapters use timeouts; no circuit breaker | Accepted | 2026-10-12 |
@@ -47,20 +47,24 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Why not B:** compensation logic and a non-final answer to the patient for a problem statement that only asks to *update* externals. **Why not C:** couples our availability to three external systems and needs undo of partial calls.
 - **Revisit when:** external calendar/room systems become shared sources of truth.
 
-## D-002 — Prevent overbooking with PostgreSQL exclusion constraints
+## D-002 — Prevent overbooking with PostgreSQL unique indexes on fixed slots
 
-- **Context:** Invariants I1/I2 must hold under concurrency and with multiple instances.
-- **Options:** A) `EXCLUDE USING gist` on (`doctor_id`, time range) and (`room_id`, time range). B) Unique index on (`doctor_id`, `start_at`). C) Application locks (pessimistic `SELECT … FOR UPDATE`, Redis lock).
-- **Decision:** A.
-- **Trade-offs:** ➕ guarantee lives in the database, independent of app instances; works for any duration. ➖ PostgreSQL-specific (needs `btree_gist`), tests need a real PostgreSQL.
-- **Why not B:** only correct while every slot has the same duration and alignment. **Why not C:** easy to get wrong, serialises requests, extra infrastructure.
+- **Context:** Invariants I1, I2 and I5 must hold under concurrency and with multiple instances.
+- **Options:**
+  - A) `EXCLUDE USING gist` on (resource, time range).
+  - B) Partial unique indexes on (resource, `start_at`) `WHERE status = 'CONFIRMED'`, plus `CHECK` constraints that fix the duration (30 min) and the grid (:00 / :30).
+  - C) Application locks (`SELECT … FOR UPDATE`, advisory or Redis locks).
+- **Decision:** B: `appointment_doctor_no_overlap`, `appointment_room_no_overlap`, `appointment_patient_no_overlap`, `appointment_fixed_duration_check`, `appointment_grid_check`. With fixed, grid-aligned slots (D-007) two appointments overlap exactly when they start at the same instant, so the unique indexes are as strong as the exclusion constraints.
+- **Trade-offs:** ➕ the guarantee lives in the database, independent of app instances; concurrent conflicting inserts fail fast with a unique violation, so optimistic retries (D-003) work; plain B-tree indexes, no extension. ➖ only valid for one fixed duration: variable durations need A again; tests need a real PostgreSQL.
+- **Why not A:** an exclusion constraint inserts its index entry and checks for conflicts afterwards, so two concurrent conflicting inserts see each other's uncommitted entry and wait for each other until the deadlock detector aborts one (after `deadlock_timeout`, 1 s). Measured with 20 parallel requests for one slot: intermittent `deadlock detected` and attempts running out. A unique B-tree index checks before inserting: the second insert waits for the first transaction to finish and then fails with a clean violation. **Why not C:** contention, harder to reason about and to defend, not needed at this load.
+- **Revisit when:** appointments get variable durations.
 
 ## D-003 — Optimistic allocation with bounded retry on conflict
 
 - **Context:** Two requests can pick the same free doctor/room at the same time.
-- **Options:** A) Pick candidates, insert, on exclusion violation try next candidate (max 3). B) Lock candidate rows first (`FOR UPDATE SKIP LOCKED`).
-- **Decision:** A.
-- **Trade-offs:** ➕ no locks held, cost only when a real race happens (rare at our load). ➖ under extreme contention some requests may get 409 after 3 attempts even if a slot frees up.
+- **Options:** A) Pick candidates, insert, on a slot-constraint violation retry with fresh candidates (max 3 attempts). B) Lock candidate rows first (`FOR UPDATE SKIP LOCKED`).
+- **Decision:** A. Each attempt is one transaction (`TransactionTemplate`); the retry wraps it from outside with Spring Framework's built-in `@Retryable` (no extra library), retrying only violations of the three slot indexes (D-002), with a few milliseconds of delay and jitter. Attempts are configured with `appointments.booking.max-retries` (2 retries = 3 attempts). When they run out, the last violation becomes `NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE`.
+- **Trade-offs:** ➕ no locks held, cost only when a real race happens (rare at our load), retry policy declared in one place. ➖ under extreme contention (more than 3 free candidates and many simultaneous requests for the same slot) some requests may get 409 after 3 attempts even if a candidate is still free.
 
 ## D-004 — Transactional outbox, one task per post-booking action
 
@@ -88,8 +92,8 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 ## D-007 — Fixed 30-minute slots aligned to the grid
 
 - **Context:** The input is a "desired timeslot".
-- **Decision:** Client sends `startAt`; duration is a configurable 30 min; `startAt` must be on `:00`/`:30`.
-- **Trade-offs:** ➕ simple validation and predictable availability. ➖ no variable durations — but the range-based constraint (D-002) already supports them if needed.
+- **Decision:** Client sends `startAt`; duration is a fixed 30 min; `startAt` must be on `:00`/`:30` (UTC). The duration and the grid are enforced by the schema (D-002), so they are not configuration.
+- **Trade-offs:** ➕ simple validation, predictable availability, overlap reduces to "same start". ➖ no variable durations; changing the duration is a migration.
 
 ## D-008 — Availability = no overlapping appointment; no opening hours or schedules
 
@@ -121,13 +125,14 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Context:** I1/I2 protect doctors and rooms, not patients. A retried request (double click, timeout, new tab) would simply pick *another* free doctor and room, booking the same patient N times at the same slot.
 - **Options:**
   - A) `Idempotency-Key` header: same key → replay the original response.
-  - B) Invariant I5: exclusion constraint on (`patient_id`, `slot`); the natural key *patient + slot* identifies a retry.
+  - B) Invariant I5: unique (`patient_id`, `start_at`) for confirmed appointments (D-002); the natural key *patient + slot* identifies a retry.
   - C) Both.
 - **Decision:** B.
-  - Same patient + slot + specialty → it is a retry: **200** with the existing appointment.
+  - Same patient + slot + specialty → it is a retry: **201** with the existing appointment, the same body as the original response.
   - Same patient + slot, different specialty → **409** `PATIENT_ALREADY_BOOKED`.
+  - Each booking attempt first looks for the patient's confirmed appointment at that slot. Two identical requests in parallel: one inserts, the other hits a slot index, is retried (D-003) and finds the first appointment.
 - **Trade-offs:** ➕ protection independent of client behaviour (a new key per click, two tabs or two devices would defeat option A); no client contract; one line of SQL using the same mechanism as I1/I2; a sound business rule on its own (nobody attends two consultations at once). ➖ adds a rule the statement does not state explicitly; does not cover *different* slots (not a duplicate — see rate limiting, out of scope).
-- **Why 200 and not 201 on retry:** 201 means "this request created a resource"; 200 is accurate, costs clients nothing (both are 2xx success with the same body) and keeps duplicates visible in access logs/metrics.
+- **Why 201 on retry:** from the client's point of view an idempotent operation returns the same response however many times it is sent (the replay model of `Idempotency-Key` APIs). Clients need no special case, and nothing about the response depends on which copy of the request arrived first. Repeated requests are visible in the logs ("Repeated request for appointment …") and, in Step 7, in metrics, instead of in the status code.
 
 ## D-012 — Service-to-service authentication with per-endpoint roles
 
@@ -145,7 +150,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 - **Context:** "The choice of data layer is up to you."
 - **Decision:** PostgreSQL.
-- **Trade-offs:** ➕ exclusion constraints on time ranges (D-002), `SKIP LOCKED` for the outbox (D-004), transactions spanning booking + outbox, mature and widely known. ➖ vendor-specific features reduce DB portability (accepted).
+- **Trade-offs:** ➕ partial unique indexes and `CHECK` constraints for the slot invariants (D-002), `SKIP LOCKED` for the outbox (D-004), transactions spanning booking + outbox, mature and widely known. ➖ vendor-specific features reduce DB portability (accepted).
 
 ## D-014 — Single deployable (modular monolith), no message broker
 
@@ -201,7 +206,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 ## D-020 — Spring Data JPA, native SQL only where PostgreSQL features are needed
 
-- **Context:** The design relies on PostgreSQL features (exclusion constraints, `tstzrange`, `FOR UPDATE SKIP LOCKED`).
+- **Context:** The design relies on PostgreSQL features (partial unique indexes, `FOR UPDATE SKIP LOCKED`).
 - **Decision:** Spring Data JPA (Hibernate) for entities and simple queries; explicit `@Query` (JPQL, or native SQL for PostgreSQL-specific operations such as the outbox claim). Flyway owns the schema (`ddl-auto: validate`). Rules: `open-in-view: false`, `LAZY` associations, fetch joins where a response needs related data, no bidirectional associations, constraint names mapped explicitly to domain errors.
 - **Trade-offs:** ➕ familiar to most Java teams, less boilerplate for CRUD and pagination. ➖ JPA hides SQL and invites N+1 and lazy-loading surprises — contained by the rules above; PostgreSQL-specific parts are native SQL anyway.
 - **Why not `JdbcClient`:** fully explicit, but more hand-written mapping code for a team used to JPA.

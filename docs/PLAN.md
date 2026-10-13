@@ -20,8 +20,8 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 
 | Setting | Default |
 |---------|---------|
-| Slot duration | 30 min (grid `:00` / `:30`, UTC) |
-| Allocation attempts on conflict | 3 |
+| Slot duration | 30 min (grid `:00` / `:30`, UTC) — fixed by the schema (D-002, D-007) |
+| Allocation attempts on conflict | 3 (`appointments.booking.max-retries: 2`) |
 | Outbox poll interval / batch size / lease | 2 s / 20 / 30 s |
 | Outbox backoff | 5 s × 2 per attempt, capped at 10 min, ± 20 % jitter |
 | Outbox max attempts | 10 |
@@ -126,19 +126,26 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 ## Step 3 — Concurrency and duplicate protection
 
 **Scope**
-- Allocation retry loop (D-003) outside the transaction: one `TransactionTemplate`
-  transaction per attempt, `saveAndFlush`, constraint name → outcome mapping.
-- Duplicate handling (D-011): pre-check + `appointment_patient_no_overlap` → re-check.
+- `V2` migration (D-002): partial unique indexes `appointment_doctor_no_overlap`,
+  `appointment_room_no_overlap`, `appointment_patient_no_overlap` on (resource, `start_at`)
+  `WHERE status = 'CONFIRMED'` replace the exclusion constraints; `CHECK` constraints fix the
+  duration (30 min) and the grid.
+- Optimistic allocation retry (D-003): one `TransactionTemplate` transaction per attempt,
+  `saveAndFlush`, retried from outside with Spring Framework's `@Retryable` on slot-index
+  violations only; index name → outcome mapping when attempts run out.
+- Duplicate handling (D-011): each attempt first looks for the patient's appointment at that
+  slot; a repeated request gets the existing appointment with **201**.
 
 **Acceptance criteria**
-- Same patient + slot + specialty again → **200** with the same appointment body; still one
+- Same patient + slot + specialty again → **201** with the same appointment body; still one
   appointment and three outbox tasks.
 - Same patient + slot, different specialty → 409 `PATIENT_ALREADY_BOOKED`.
-- **Concurrency (I1, I2):** given K doctors of a specialty and R rooms, 20 parallel requests
-  from different patients for the same slot → exactly `min(K, R)` × 201, the rest 409, and no
-  overlapping rows in the database.
+- **Concurrency (I1, I2):** given K doctors of a specialty and R rooms (min(K, R) ≤ 3), 20
+  parallel requests from different patients for the same slot → exactly `min(K, R)` × 201, the
+  rest 409, and no double bookings in the database.
 - **Concurrency (I5):** 10 parallel identical requests from one patient → exactly one
-  appointment; every response is 201 or 200.
+  appointment; every response is 201 with the same body.
+- The database rejects a start off the grid and a duration other than 30 minutes.
 
 **Commit:** `feat: concurrency-safe allocation and duplicate booking protection`
 

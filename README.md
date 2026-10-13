@@ -135,12 +135,12 @@ quotes, or use Swagger UI instead.
 }
 ```
 
-Errors are RFC 9457 problem details (`application/problem+json`) with a stable `code`:
+Errors are RFC 9457 problem details (`application/problem+json`). Identify them by `code`; `title` is
+the HTTP status phrase and `detail` explains the case:
 
 ```json
 {
-  "type": "https://api.example.com/problems/slot-in-past",
-  "title": "Slot in the past",
+  "title": "Bad Request",
   "status": 400,
   "code": "SLOT_IN_PAST",
   "detail": "Slot 2020-01-07T14:00:00Z is not in the future",
@@ -155,7 +155,8 @@ Errors are RFC 9457 problem details (`application/problem+json`) with a stable `
 | 400 | `SLOT_NOT_ALIGNED` | `startAt` is not on :00 or :30 UTC |
 | 401 / 403 | — | No or wrong credentials / wrong role |
 | 404 | `PATIENT_NOT_FOUND`, `SPECIALTY_NOT_FOUND` | Unknown patient or specialty code |
+| 409 | `PATIENT_ALREADY_BOOKED` | The patient already has another appointment at that slot |
 | 409 | `NO_DOCTOR_AVAILABLE`, `NO_ROOM_AVAILABLE` | Nothing free at that slot |
 
-Known limitation until Step 3: booking the same patient twice at the same slot, or two requests racing
-for the same doctor or room, ends in a `500` instead of the final `200` / `409` behaviour.
+Sending the same request again (same patient, slot and specialty) is safe: it returns `201` with
+the appointment created the first time, and nothing new is booked (D-011).

@@ -309,9 +309,9 @@ class BookAppointmentTest {
     assertThat(result).contentType().isCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
     assertThat(result).bodyJson().extractingPath("$.code").isEqualTo(code);
     assertThat(result).bodyJson().extractingPath("$.status").isEqualTo(status.value());
-    assertThat(result).bodyJson().extractingPath("$.title").isNotNull();
+    assertThat(result).bodyJson().extractingPath("$.title").isEqualTo(status.getReasonPhrase());
     assertThat(result).bodyJson().extractingPath("$.detail").isNotNull();
-    assertThat(result).bodyJson().extractingPath("$.type").asString().startsWith("https://");
+    assertThat(result).bodyJson().doesNotHavePath("$.type");
     assertThat(result).bodyJson().extractingPath("$.instance").isEqualTo(URI);
   }
 
@@ -344,7 +344,7 @@ class BookAppointmentTest {
   private Appointment save(
       Patient patient, Specialty specialty, Doctor doctor, Room room, Instant startAt) {
     return appointments.saveAndFlush(
-        new Appointment(patient, specialty, doctor, room, startAt, SLOT, clock.instant()));
+        new Appointment(patient, specialty, doctor, room, startAt, clock.instant()));
   }
 
   private Specialty newSpecialty() {

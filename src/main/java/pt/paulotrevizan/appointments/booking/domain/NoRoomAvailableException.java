@@ -7,10 +7,6 @@ import pt.paulotrevizan.appointments.common.web.ApiException;
 public class NoRoomAvailableException extends ApiException {
 
   public NoRoomAvailableException(Instant startAt) {
-    super(
-        HttpStatus.CONFLICT,
-        "NO_ROOM_AVAILABLE",
-        "No room available",
-        "No room is free at " + startAt);
+    super(HttpStatus.CONFLICT, "NO_ROOM_AVAILABLE", "No room is free at " + startAt);
   }
 }
