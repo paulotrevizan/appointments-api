@@ -35,7 +35,8 @@ decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
 
 - Java 25 (virtual threads enabled), Maven Wrapper, Spring Boot 4.1.x (latest stable).
 - PostgreSQL 18, Flyway, Spring Data JPA (Hibernate).
-- Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, `RestClient`, Actuator + Micrometer.
+- Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, HTTP Service Clients
+  (`@HttpExchange` on `RestClient`), Actuator + Micrometer.
 - Lombok (restricted, see below). Datafaker for the local data seeder only (D-024).
 - springdoc-openapi for the OpenAPI document and Swagger UI (D-026).
 - Tests: JUnit 5, AssertJ, Testcontainers (PostgreSQL), WireMock, GreenMail, Awaitility.
@@ -77,8 +78,9 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
 - Controllers are thin: validate the request shape, call one service method, map the result.
 - Business rules live in `@Service` classes: stateless, small focused methods, unit-testable.
 - Repositories are simple: queries only, no business logic.
-- Interfaces **only** for the three external systems (`DoctorCalendarGateway`,
-  `RoomReservationGateway`, `EmailSender`). No interface-per-service.
+- Interfaces **only** for the three external systems: `DoctorCalendarClient` and
+  `RoomReservationClient` (declarative `@HttpExchange` clients that Spring implements) and
+  `EmailSender`. No interface-per-service.
 - DTOs are Java `records`, mapped manually (static `from(...)` factory on the response record
   or a small mapper class next to the controller). No MapStruct, no Spring Data projections.
 
@@ -86,9 +88,9 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
 
 - Constructor injection for every dependency, fields `private final`. **Never `@Autowired`**
   on fields or setters. Use Lombok `@RequiredArgsConstructor`.
-- Lombok allowed: `@RequiredArgsConstructor`, `@Slf4j`, and on JPA entities only `@Getter` +
-  `@NoArgsConstructor(access = AccessLevel.PROTECTED)`. **Not allowed:** `@Data`, `@Setter`,
-  `@Builder`, `@EqualsAndHashCode`, `@ToString` on entities.
+- Lombok allowed: `@RequiredArgsConstructor`, `@Slf4j`, `@Getter` on JPA entities and on
+  exceptions, and on JPA entities `@NoArgsConstructor(access = AccessLevel.PROTECTED)`.
+  **Not allowed:** `@Data`, `@Setter`, `@Builder`, `@EqualsAndHashCode`, `@ToString` on entities.
 - Entities change state through intention-revealing methods (`markDone()`, `scheduleRetry(...)`),
   not setters.
 - KISS first: short, readable code over clever abstractions. DRY with restraint — a little

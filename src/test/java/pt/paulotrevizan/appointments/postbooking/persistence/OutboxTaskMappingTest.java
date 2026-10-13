@@ -54,7 +54,7 @@ class OutboxTaskMappingTest {
   }
 
   @Test
-  @DisplayName("Outbox tasks start PENDING with timestamps from the database clock")
+  @DisplayName("Outbox tasks start PENDING, due now, with their timestamps")
   void givenAppointment_whenThreeTasksPersisted_thenPendingWithDatabaseTimestamps() {
     UUID appointmentId = persistAppointmentWithTasks();
 
@@ -85,7 +85,8 @@ class OutboxTaskMappingTest {
                     status -> {
                       Appointment appointment =
                           entityManager.getReference(Appointment.class, appointmentId);
-                      entityManager.persist(new OutboxTask(appointment, OutboxTaskType.EMAIL));
+                      entityManager.persist(
+                          new OutboxTask(appointment, OutboxTaskType.EMAIL, clock.instant()));
                       entityManager.flush();
                     }))
         .rootCause()
@@ -107,7 +108,7 @@ class OutboxTaskMappingTest {
                   patient, specialty, doctor, room, Instant.parse("2030-01-07T14:00:00Z"), now);
           List.of(patient, specialty, doctor, room, appointment).forEach(entityManager::persist);
           for (OutboxTaskType type : OutboxTaskType.values()) {
-            entityManager.persist(new OutboxTask(appointment, type));
+            entityManager.persist(new OutboxTask(appointment, type, now));
           }
           return appointment.getId();
         });

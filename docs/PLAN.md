@@ -22,7 +22,7 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 |---------|---------|
 | Slot duration | 30 min (grid `:00` / `:30`, UTC) — fixed by the schema (D-002, D-007) |
 | Allocation attempts on conflict | 3 (`appointments.booking.max-retries: 2`) |
-| Outbox poll interval / batch size / lease | 2 s / 20 / 30 s |
+| Outbox poll interval / batch size | 2 s / 10 |
 | Outbox backoff | 5 s × 2 per attempt, capped at 10 min, ± 20 % jitter |
 | Outbox max attempts | 10 |
 | HTTP adapter timeouts | connect 2 s / read 5 s |
@@ -154,12 +154,13 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 ## Step 4 — Outbox worker, calendar and room adapters
 
 **Scope**
-- `OutboxWorker` (`@Scheduled`, fixed delay): claim due tasks with `FOR UPDATE SKIP LOCKED`
-  and a lease, using the database clock (HLD §6.2); dispatch by task type.
-- `RetryPolicy`: exponential backoff with cap and jitter; max attempts; failure classification
-  (D-017).
-- Ports `DoctorCalendarGateway`, `RoomReservationGateway` with `RestClient` adapters (timeouts,
-  `Idempotency-Key: {appointmentId}`, contracts in HLD §7.3).
+- `OutboxWorker` (`@Scheduled`, fixed delay, one transaction per poll): lock due tasks with
+  `FOR UPDATE SKIP LOCKED`, call the external system of each one, record the outcome on the task
+  entity (HLD §6.2, D-004); times from the application `Clock`.
+- `RetryPolicy`: exponential backoff with cap and jitter as a function of the attempt count; max
+  attempts; failure classification (D-017).
+- `DoctorCalendarClient`, `RoomReservationClient`: declarative HTTP clients (`@PostExchange`)
+  implemented by Spring, `Idempotency-Key: {appointmentId}`, contracts in HLD §7.3, timeouts.
 
 **Acceptance criteria** (WireMock for externals, Awaitility for async)
 - After a booking, the calendar and room systems each receive exactly one request with the
@@ -169,7 +170,8 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
   in the future; once the system recovers → `DONE`.
 - External 4xx → task `FAILED` immediately with `last_error` (D-017).
 - Max attempts reached → `FAILED`.
-- Two concurrent claims never return the same task; a task with an expired lease is claimed again.
+- Two workers running at the same time never get the same task; tasks locked by a worker
+  that dies (transaction rolled back) are picked up again.
 - *Unit:* backoff grows exponentially, respects the cap and jitter bounds; classification table.
 
 **Commit:** `feat: transactional outbox worker with calendar and room integrations`
@@ -181,7 +183,8 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 **Scope**
 - `EmailSender` port + SMTP adapter (`JavaMailSender`). Plain-text body: date/time (UTC),
   doctor name, room. **No specialty** (health data, HLD §8).
-- Email task handler loads appointment, patient, doctor and room at execution time.
+- Email task handler loads appointment, patient, doctor and room at execution time; `EMAIL` is
+  added to the task types the worker picks up (until then those tasks stay `PENDING`).
 - SMTP transient vs permanent failure classification.
 
 **Acceptance criteria** (GreenMail)

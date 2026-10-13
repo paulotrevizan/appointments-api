@@ -72,7 +72,7 @@ sequenceDiagram
   participant EXT as External System
 
   loop every 2 seconds
-    W->>DB: claim due PENDING tasks (SKIP LOCKED + lease)
+    W->>DB: lock due PENDING tasks (FOR UPDATE SKIP LOCKED, one transaction)
     W->>AD: execute task (calendar, room or email)
     AD->>EXT: HTTP or SMTP call with timeout
     alt success
@@ -155,7 +155,6 @@ classDiagram
     string status
     int attempts
     timestamptz next_attempt_at
-    timestamptz locked_until
     string last_error
     timestamptz created_at
     timestamptz updated_at

@@ -11,7 +11,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-003 | Optimistic allocation with bounded retry on conflict | Accepted | 2026-10-12 |
 | D-004 | Transactional outbox, one task per post-booking action | Accepted | 2026-10-12 |
 | D-005 | Retry lives in the outbox; adapters use timeouts; no circuit breaker | Accepted | 2026-10-12 |
-| D-006 | External systems: ports + production-style adapters, simulated locally | Accepted | 2026-10-12 |
+| D-006 | External systems: one interface each with a real implementation, simulated locally | Accepted | 2026-10-12 |
 | D-007 | Fixed 30-minute slots aligned to the grid | Accepted | 2026-10-12 |
 | D-008 | Availability = no overlapping appointment; no opening hours or schedules | Accepted | 2026-10-12 |
 | D-009 | Doctor selection: least booked that day; room: first free | Accepted | 2026-10-12 |
@@ -32,6 +32,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
 | D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
+| D-027 | The doctor calendar receives the patient id, never patient details | Accepted | 2026-10-13 |
 
 ---
 
@@ -73,20 +74,26 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Decision:** A, with **three independent tasks** (calendar, room, email) per appointment.
 - **Trade-offs:** ➕ atomic with the booking, survives restarts, no extra infrastructure, per-action status visible. ➖ polling latency (seconds), table needs cleanup over time.
 - **Why not B:** events are lost if the instance crashes. **Why not C:** extra infrastructure not justified by the load; a natural evolution when other services need the events.
-- **Detail:** claim with `FOR UPDATE SKIP LOCKED` + lease (`locked_until`) so multiple instances never process the same task and no transaction is held during external calls.
+- **Detail:** the worker is deliberately minimal. Every poll, one transaction locks up to `batch-size` due tasks with `FOR UPDATE SKIP LOCKED` (instances skip each other's rows), calls the external systems one after another and records each outcome on the task entity (`markDone`, `recordFailure`). If the instance dies, the transaction rolls back and the tasks are picked up again, so no lease is needed. Times come from the application `Clock`. Only task types with a handler are picked up. The worker can be switched off with `appointments.outbox.worker.enabled` (off in the `test` profile).
+- **Trade-off of the minimal worker:** a DB connection and the batch's row locks are held during its external calls (at most `batch-size` × the timeouts). At ~1 booking/s that is acceptable. **Revisit when** the volume grows: add a lease column and make the calls outside the transaction, in parallel.
+- **Why not a broker (Kafka, RabbitMQ):** writing the booking and publishing a message are two separate writes; without an outbox (or CDC) a crash between them loses the message. A broker would come *in addition* to the outbox, with its own infrastructure, consumers and dead-letter handling.
 
 ## D-005 — Retry lives in the outbox; adapters use timeouts; no circuit breaker
 
 - **Context:** Are retry and circuit breaker enough to deal with unavailable external systems?
-- **Decision:** No — durability comes from the outbox (D-004). Retries are scheduled by the outbox with exponential backoff + jitter; after N attempts the task is `FAILED` and alerts. Adapters apply timeouts only.
+- **Decision:** No — durability comes from the outbox (D-004). Retries are scheduled by the outbox with exponential backoff + jitter; after N attempts the task is `FAILED` and alerts. Adapters apply timeouts only (`spring.http.clients.connect-timeout` / `read-timeout`, 2 s / 5 s) and use HTTP/1.1 (on plain `http://` the JDK client would try an h2c upgrade that many servers and proxies cancel).
+  - The task row *is* the retry state (`attempts`, `next_attempt_at`), so it survives restarts. The delay is a pure function of the attempt count (`RetryPolicy`): `min(5 s × 2^(attempts-1), 10 min) ± 20 %`.
+  - No in-memory `@Retryable` here: it would hold the thread for minutes during an outage and lose the retry state on a crash. Spring's `BackOff` is an in-memory iterator; it does not fit a delay that must be computed from a persisted count.
 - **Why no circuit breaker:** the booking path never calls externals, so there is no user-facing latency to protect; the outbox backoff already stops hammering a failing system. At ~1 req/s a breaker adds a dependency and configuration without measurable benefit.
 - **Trade-offs:** ➕ a single place that controls retries (no retry storms from stacked layers), fewer moving parts, predictable behaviour. ➖ during a long outage each due task still makes one (timed-out) call per backoff step.
 - **Revisit when:** post-booking volume grows enough that failing calls consume worker capacity.
 
-## D-006 — External systems: ports + production-style adapters, simulated locally
+## D-006 — External systems: one interface each with a real implementation, simulated locally
 
 - **Context:** Should we build the external systems or just interfaces?
-- **Decision:** Domain ports (`DoctorCalendarGateway`, `RoomReservationGateway`, `EmailSender`) with real HTTP/SMTP adapters; the external systems are simulated (HTTP mock and fake SMTP) in local and test environments.
+- **Decision:** One interface per external system, with a real HTTP/SMTP implementation; the external systems are simulated (HTTP mock and fake SMTP) in local and test environments.
+  - HTTP systems: a declarative HTTP Service Client is the port (`DoctorCalendarClient`, `RoomReservationClient`, `@PostExchange`), and Spring generates the implementation (`@ImportHttpServices`, base URL in `spring.http.serviceclient.<group>.base-url`). There is no hand-written adapter to keep in sync with the interface. Failures are classified once, in the outbox worker (D-017).
+  - Email: `EmailSender` port with an SMTP adapter (Step 5), since there is no declarative equivalent.
 - **Trade-offs:** ➕ integration points are real and swappable, behaviour is testable end-to-end. ➖ outbound contracts are assumed by us and must be aligned with the real systems.
 
 ## D-007 — Fixed 30-minute slots aligned to the grid
@@ -265,3 +272,11 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Decision:** B. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. The document is generated from the code; the only hand-written parts are the Basic scheme and a request example, in `OpenApiConfig`.
 - **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, no annotations in controllers or DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; error codes are not in the generated document (they are in the README).
 - **Revisit when:** the API needs richer documentation (error responses, descriptions) — add annotations or a separate OpenAPI file.
+
+## D-027 — The doctor calendar receives the patient id, never patient details
+
+- **Context:** The doctor has to know who the appointment is for, yet the calendar system is outside this service, and an appointment linked to a person is health data (GDPR / LGPD special category, HLD 8).
+- **Options:** A) Send nothing about the patient. B) Send the `patientId`, a pseudonymous reference to the patient registry. C) Send name and contact details.
+- **Decision:** B. `POST /doctors/{doctorId}/events` carries `patientId`; the clinic systems resolve it in the patient registry, which already holds the details (HLD A5). The room system gets no patient data, and the event title stays generic ("Medical appointment", no specialty).
+- **Trade-offs:** ➕ the doctor can see who is coming; no names, emails or phones leave this service; a patient's data is changed or erased in one place. ➖ the calendar system needs access to the patient registry to show a name.
+- **Why not A:** the calendar would be useless for its main purpose. **Why not C:** copies PII into another system for no gain over B.

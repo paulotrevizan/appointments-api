@@ -1,6 +1,5 @@
 package pt.paulotrevizan.appointments.postbooking.domain;
 
-import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -34,23 +33,39 @@ public class OutboxTask extends BaseEntity {
   private OutboxTaskStatus status;
 
   private int attempts;
-  private Instant lockedUntil;
-  private String lastError;
-
-  // Set by the database clock (column defaults), never by the application.
-  @Column(insertable = false, updatable = false)
   private Instant nextAttemptAt;
-
-  @Column(insertable = false, updatable = false)
+  private String lastError;
   private Instant createdAt;
-
-  @Column(insertable = false, updatable = false)
   private Instant updatedAt;
 
-  public OutboxTask(Appointment appointment, OutboxTaskType type) {
+  public OutboxTask(Appointment appointment, OutboxTaskType type, Instant now) {
     this.id = UUID.randomUUID();
     this.appointment = appointment;
     this.type = type;
     this.status = OutboxTaskStatus.PENDING;
+    this.nextAttemptAt = now;
+    this.createdAt = now;
+    this.updatedAt = now;
+  }
+
+  public void markDone(Instant now) {
+    this.status = OutboxTaskStatus.DONE;
+    this.lastError = null;
+    this.updatedAt = now;
+  }
+
+  /**
+   * Counts a failed attempt. The task is retried at {@code nextAttemptAt}, or FAILED when there is
+   * none: the failure is permanent or the attempts are used up (D-005, D-017).
+   */
+  public void recordFailure(String error, Instant now, Instant nextAttemptAt) {
+    this.attempts++;
+    this.lastError = error;
+    this.updatedAt = now;
+    if (nextAttemptAt == null) {
+      this.status = OutboxTaskStatus.FAILED;
+    } else {
+      this.nextAttemptAt = nextAttemptAt;
+    }
   }
 }

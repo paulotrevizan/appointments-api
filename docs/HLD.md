@@ -44,7 +44,7 @@ exists to protect one of them.
 | Question | Answer |
 |----------|--------|
 | Is a security layer required? | **Yes, minimal (D-012).** Calling services authenticate, and each endpoint requires a role: `BOOKING_CLIENT` to book, `ADMIN` to list. The listing exposes every patient's appointments, so it is the main asset to protect. Per-patient authorization is the caller's responsibility (A6). |
-| Implement the external systems or only interfaces? | **Interface + real-style adapter.** Domain ports (`DoctorCalendarGateway`, `RoomReservationGateway`, `EmailSender`), HTTP/SMTP adapters written as production code, and the external systems **simulated** (HTTP mock + fake SMTP). We do not build the external systems. |
+| Implement the external systems or only interfaces? | **Interface + real-style adapter.** One interface per external system (`DoctorCalendarClient`, `RoomReservationClient` — declarative HTTP clients that Spring implements — and `EmailSender` with an SMTP adapter), written as production code, and the external systems **simulated** (HTTP mock + fake SMTP). We do not build the external systems. |
 | Are Retry + Circuit Breaker enough? | **No.** They handle *transient* failures but do not *remember* pending work if the process restarts or the external system is down for an hour. **Durability comes from the outbox.** Retries are done by the outbox with exponential backoff, which already stops hammering a failing system, so a circuit breaker adds little at this load and is left out (D-005). Adapters use timeouts. |
 | How do we know the calendar/room were updated? | Each post-booking action is a row in `outbox_task` with a status (`PENDING → DONE / FAILED`). The admin listing exposes it; `FAILED` raises an alert/metric. |
 | Block the user or return 201 + outbox? | **201 + outbox** (D-001). Booking works even if all externals are down; consistency lives in our DB. |
@@ -106,23 +106,26 @@ Single deployable Spring Boot service (modular monolith) + PostgreSQL. No messag
 
 ### 6.2 Post-booking actions (asynchronous)
 
-1. Every ~2 s the worker claims due tasks in a short transaction:
-   `status = PENDING AND next_attempt_at <= now() AND (locked_until IS NULL OR locked_until < now())`
-   using `FOR UPDATE SKIP LOCKED`, and sets a lease (`locked_until = now() + 30s`).
-   No DB transaction is held during external calls; a crashed instance's tasks become
-   claimable again when the lease expires.
-2. Call the adapter (with timeout).
+1. Every ~2 s the worker opens **one transaction** and locks up to 10 due tasks
+   (`status = PENDING AND next_attempt_at <= now`) with `FOR UPDATE SKIP LOCKED`: other
+   instances skip those rows, so no task is processed twice at the same time.
+2. For each task it calls the external system (timeouts: connect 2 s, read 5 s) and records the
+   outcome on the task; the transaction commits at the end of the batch. If the instance dies
+   mid-batch, the transaction rolls back, the locks are released and the tasks are picked up
+   again — no lease to manage.
 3. Success → `DONE`. Failure is classified (D-017):
    - **retryable** (timeout, connection error, HTTP 5xx / 429, SMTP transient) →
-     `attempts + 1`, `next_attempt_at = now + exponential backoff (with jitter)`;
+     `attempts + 1`, `next_attempt_at = now + min(5 s × 2^(attempts-1), 10 min) ± 20 %`;
      after **N attempts** → `FAILED`;
    - **non-retryable** (other HTTP 4xx, e.g. the external system rejects the reservation,
      SMTP permanent failure) → `FAILED` immediately — retrying cannot fix it.
 
    `FAILED` → metric + log alert, visible in the admin listing.
-   All times (`next_attempt_at`, `locked_until`) use the **database clock**, never the
-   instances' clocks. The lease (30 s) is longer than the adapter timeout; if it still
-   expires mid-call the task may run twice — harmless thanks to A7.
+   Times come from the application `Clock` (UTC). Instances' clocks differ by milliseconds
+   (NTP), which does not matter for delays of seconds.
+   Trade-off: one DB connection and the locks on the batch's rows are held during its external
+   calls (at most 10 × the timeouts). At this load that is acceptable; if the volume grows, the
+   evolution is a lease column and calls outside the transaction (D-004).
 4. The three tasks are **independent**: the email does not wait for the calendar, because
    doctor and room are already known locally (consequence of A1).
 
@@ -247,12 +250,12 @@ Next page: `GET /api/v1/admin/appointments?limit=20&cursor=eyJzdGFydEF0Ijoi...`
 | 400 | `INVALID_CURSOR`, `VALIDATION_ERROR` | Malformed cursor, `limit` out of range |
 | 401 / 403 | — | Not authenticated / not `ADMIN` |
 
-### 7.3 Outbound contracts (defined by us, implemented by adapters — FR 2)
+### 7.3 Outbound contracts (defined by us — FR 2)
 
 | Port | Adapter call | Idempotency |
 |------|--------------|-------------|
-| `DoctorCalendarGateway.addEvent(...)` | `POST {calendar-base-url}/doctors/{doctorId}/events` body `{ appointmentId, startAt, endAt, title }` | `Idempotency-Key: {appointmentId}` |
-| `RoomReservationGateway.reserve(...)` | `POST {rooms-base-url}/rooms/{roomId}/reservations` body `{ appointmentId, startAt, endAt }` | `Idempotency-Key: {appointmentId}` |
+| `DoctorCalendarClient.addEvent(...)` | `POST {calendar-base-url}/doctors/{doctorId}/events` body `{ appointmentId, patientId, startAt, endAt, title }` (D-027) | `Idempotency-Key: {appointmentId}` |
+| `RoomReservationClient.reserve(...)` | `POST {rooms-base-url}/rooms/{roomId}/reservations` body `{ appointmentId, startAt, endAt }` | `Idempotency-Key: {appointmentId}` |
 | `EmailSender.send(to, subject, body)` | SMTP (fake SMTP server locally) | Task status prevents re-send after `DONE` |
 
 ## 8. Data model (PostgreSQL)
@@ -273,7 +276,7 @@ APPOINTMENT 1 ── 3 OUTBOX_TASK
 | `doctor` | `id`, `name`, `email`, `specialty_id`, `active` | FK specialty |
 | `room` | `id`, `name`, `active` | `name` unique |
 | `appointment` | `id`, `patient_id`, `specialty_id`, `doctor_id`, `room_id`, `start_at`, `end_at`, `status`, `created_at`, `updated_at` | **I1:** unique (`doctor_id`, `start_at`) `WHERE status = 'CONFIRMED'` · **I2:** same for `room_id` · **I5:** same for `patient_id` · `CHECK` `end_at - start_at = 30 min` and `start_at` on the :00 / :30 grid (D-002, D-007) · index on (`start_at`, `id`) for the admin listing |
-| `outbox_task` | `id`, `appointment_id`, `type` (`DOCTOR_CALENDAR` / `ROOM_RESERVATION` / `EMAIL`), `status` (`PENDING` / `DONE` / `FAILED`), `attempts`, `next_attempt_at`, `locked_until`, `last_error`, `created_at`, `updated_at` | FK appointment · unique (`appointment_id`, `type`) · index on (`status`, `next_attempt_at`) |
+| `outbox_task` | `id`, `appointment_id`, `type` (`DOCTOR_CALENDAR` / `ROOM_RESERVATION` / `EMAIL`), `status` (`PENDING` / `DONE` / `FAILED`), `attempts`, `next_attempt_at`, `last_error`, `created_at`, `updated_at` | FK appointment · unique (`appointment_id`, `type`) · index on (`status`, `next_attempt_at`) |
 
 Notes:
 - `appointment.status` is `CONFIRMED` today; `CANCELLED` is reserved so the constraints
@@ -289,7 +292,8 @@ Notes:
   current address.
 - Appointment data is **health data** (a specialty can reveal a condition — GDPR special
   category). The email carries only what the FR requires (date/time, doctor name, room), not
-  the specialty; logs carry ids only, never names, emails or specialties.
+  the specialty; logs carry ids only, never names, emails or specialties. The doctor calendar
+  receives the patient by id only (D-027); the room system receives no patient data.
 
 ## 9. Non-functional view
 
@@ -335,7 +339,7 @@ Notes:
 | Instance crashes | After commit, before response | Booking + outbox exist; client retry gets **201** with the same appointment | I5, I4 |
 | Two identical requests | Concurrently | One inserts; the other hits the slot index, is retried and finds the first appointment → both get 201 with the same body | I5 |
 | Many requests, same slot | Concurrently | The slot index rejects losers → retried with fresh candidates (max 3 attempts) → 201 or 409 | I1, I2 |
-| Worker crashes | During an external call | Lease expires → task claimed again → external dedups by appointment id | I4 |
+| Worker crashes | During an external call | Its transaction rolls back → tasks picked up again → external dedups by appointment id | I4 |
 | External system down | For hours | Tasks back off; booking keeps working; after N attempts `FAILED` + alert | I4 (nothing lost) |
 | External rejects (4xx) | Any time | Non-retryable → `FAILED` immediately + alert → manual reconciliation | I4 (visible, not silent) |
 | PostgreSQL down | Any time | Booking returns 503; readiness probe fails; worker pauses; nothing half-written | All |
@@ -358,7 +362,7 @@ Runbook (README): how to inspect `FAILED` tasks, re-drive one after fixing the c
 (`status = 'PENDING', attempts = 0, next_attempt_at = now()`), and check external system
 health. Deploys: migrations are backward compatible (expand → migrate → contract) so a
 rolling deploy can run old and new versions side by side; on shutdown the worker stops
-claiming and in-flight tasks finish or are recovered by lease expiry.
+claiming and an in-flight batch finishes, or rolls back and is picked up again.
 
 ## 14. Other risks
 
