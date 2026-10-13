@@ -95,7 +95,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 - **Context:** "Available doctor" is not defined, and no opening hours or doctor schedules are given.
 - **Options:** A) No overlapping appointment only. B) Plus global clinic opening hours (configured). C) Plus per-doctor working hours.
-- **Decision:** A — any future slot aligned to the 30-min grid is bookable.
+- **Decision:** A — any future slot aligned to the 30-min grid is bookable, with no booking horizon and no calendar rules (weekends and holidays included).
 - **Why not B or C:** both require business data we do not have, so we would be inventing policy (e.g. "Mon–Fri 08:00–18:00") that readers would mistake for a real rule. Schedules, leave and holidays belong to the doctor calendar / clinic systems. Without opening hours there is no need for a clinic time zone: everything stays UTC, with no DST edge cases.
 - **Trade-offs:** ➕ no invented rules, no time-zone handling. ➖ the API accepts a slot at 03:00 — the booking channel is expected to offer sensible slots.
 - **Revisit when:** schedules become available (e.g. from the calendar system) — it is a validation rule, not a design change.
@@ -208,7 +208,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 ## D-021 — Layered architecture, packaged by feature; interfaces only at external boundaries
 
-- **Decision:** Packages by feature (`booking`, `admin`, `postbooking`, `integration`, `common`); inside each, Controller → Service → Repository. Controllers are thin and never touch repositories; business rules live in stateless `@Service` classes. DTOs, request validation and the HTTP error mapping stay with the controllers. Interfaces exist only for the three external systems (calendar, rooms, email), which have real and simulated implementations.
+- **Decision:** Packages by feature (`catalog`, `booking`, `admin`, `postbooking`, `integration`, `common`); inside each, Controller → Service → Repository. `catalog` holds the reference data (patients, doctors, rooms, specialties) and never depends on `booking`. Every feature uses the same layers, only the ones it needs: `api` (controller, DTOs), `application` (services, policies), `domain` (entities, domain exceptions) and `persistence` (repositories), with dependencies pointing from `api` inwards. `common` is cross-cutting and is split by concern instead (`web`, `security`, `persistence`, `config`). Controllers are thin and never touch repositories; business rules live in stateless `@Service` classes. DTOs, request validation and the HTTP error mapping stay with the controllers. Interfaces exist only for the three external systems (calendar, rooms, email), which have real and simulated implementations.
 - **Trade-offs:** ➕ a feature can be read in one package; no interface-per-class ceremony; simple to test. ➖ less isolation than hexagonal/DDD — not needed at this size.
 
 ## D-022 — Behaviour-based tests against real infrastructure

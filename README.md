@@ -101,7 +101,8 @@ In other profiles both require HTTP Basic credentials, and the browser asks for 
 
 ### curl
 
-`startAt` must be in the future, in UTC, on the :00 / :30 grid. Replace the date if it has passed.
+`startAt` must be in the future, in UTC, on the :00 / :30 grid. There is no booking horizon and no
+calendar: weekends, holidays and night hours are accepted (HLD A3, D-008). Replace the date if it has passed.
 
 ```bash
 curl -i -u booking-client:booking-local \

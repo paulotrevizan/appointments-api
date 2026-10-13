@@ -28,6 +28,16 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import pt.paulotrevizan.appointments.TestcontainersConfiguration;
+import pt.paulotrevizan.appointments.booking.domain.Appointment;
+import pt.paulotrevizan.appointments.booking.persistence.AppointmentRepository;
+import pt.paulotrevizan.appointments.catalog.domain.Doctor;
+import pt.paulotrevizan.appointments.catalog.domain.Patient;
+import pt.paulotrevizan.appointments.catalog.domain.Room;
+import pt.paulotrevizan.appointments.catalog.domain.Specialty;
+import pt.paulotrevizan.appointments.catalog.persistence.DoctorRepository;
+import pt.paulotrevizan.appointments.catalog.persistence.PatientRepository;
+import pt.paulotrevizan.appointments.catalog.persistence.RoomRepository;
+import pt.paulotrevizan.appointments.catalog.persistence.SpecialtyRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
