@@ -30,6 +30,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-022 | Behaviour-based tests against real infrastructure | Accepted | 2026-10-12 |
 | D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI | Accepted | 2026-10-12 |
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
+| D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
 
 ---
 
@@ -237,3 +238,14 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
   - Docker Compose keeps no database volume, so `docker compose down` + `up` gives a fresh random dataset.
 - **Trade-offs:** ➕ realistic, varied data with zero manual setup; Flyway migrations contain only schema, so production never receives sample data; restarting never duplicates data. ➖ one extra dependency (Datafaker, local profile only); data differs between runs — anything that needs stable ids uses the demo patients.
 - **Tests:** never rely on seeded data; each test creates exactly the data it needs (deterministic).
+
+## D-025 — UUIDs assigned by the application, with a `BaseEntity` (`Persistable`)
+
+- **Context:** The demo patients need fixed ids (D-024), and Hibernate-generated ids cannot be chosen by the caller. The appointment id is also the idempotency key sent to external systems (HLD 7.3), so knowing it before the insert is useful.
+- **Options:**
+  - A) UUID assigned in the entity constructor, no `@GeneratedValue`; a `BaseEntity` implements `Persistable<UUID>`.
+  - B) Hibernate-generated UUIDs; demo patients inserted with raw SQL in the seeder; no `BaseEntity`.
+- **Decision:** A. Every table uses a `uuid` primary key assigned by the application. `BaseEntity` (in `common/`) tracks whether an entity is new, so Spring Data issues a plain `INSERT` instead of a `SELECT` followed by a merge on every `save` (which is what it does when the id is already set).
+- **Trade-offs:** ➕ stable ids for demo data and tests, id known before the insert, no extra `SELECT` per save. ➖ one base class; random UUIDs (v4) are 16 bytes and insert at random positions of the primary key index, which hurts locality on very large tables — irrelevant at ~1 req/s.
+- **Why not B:** it removes `BaseEntity` but moves the demo patients out of the entity model into hand-written SQL.
+- **Revisit when:** insert rate or table size makes index locality matter — switch to time-ordered UUID v7; the column type does not change.
