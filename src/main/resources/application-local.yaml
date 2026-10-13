@@ -3,3 +3,10 @@ spring:
     url: jdbc:postgresql://localhost:5432/appointments
     username: appointments
     password: appointments
+
+appointments:
+  seed:
+    min-doctors-per-specialty: 3
+    max-doctors-per-specialty: 5
+    rooms: 10
+    patients: 200
