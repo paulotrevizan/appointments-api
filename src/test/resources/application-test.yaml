@@ -1,14 +1,18 @@
 spring:
   main:
     banner-mode: off
+  # Tests that exercise the worker point both systems at WireMock.
+  http:
+    serviceclient:
+      calendar:
+        base-url: http://localhost:9
+      rooms:
+        base-url: http://localhost:9
 
 appointments:
   security:
     booking-client-password: booking-test
     admin-password: admin-test
-  # Tests that exercise the worker turn it on and point the systems at WireMock.
+  # Tests that exercise the worker turn it on.
   outbox:
     enabled: false
-  integration:
-    calendar-base-url: http://localhost:9
-    rooms-base-url: http://localhost:9

@@ -20,6 +20,7 @@ class DoctorCalendarTaskHandler {
     // No specialty or patient data: it would reveal health data to another system (HLD 8).
     calendar.addEvent(
         appointment.getDoctor().getId(),
+        appointment.getId(),
         new CalendarEvent(
             appointment.getId(),
             appointment.getStartAt(),

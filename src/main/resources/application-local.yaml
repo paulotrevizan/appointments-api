@@ -3,6 +3,13 @@ spring:
     url: jdbc:postgresql://localhost:5432/appointments
     username: appointments
     password: appointments
+  # WireMock simulates both systems (docker-compose.yml).
+  http:
+    serviceclient:
+      calendar:
+        base-url: http://localhost:8089
+      rooms:
+        base-url: http://localhost:8089
 
 appointments:
   security:
@@ -15,7 +22,3 @@ appointments:
     max-doctors-per-specialty: 5
     rooms: 10
     patients: 200
-  # WireMock simulates both systems (docker-compose.yml).
-  integration:
-    calendar-base-url: http://localhost:8089
-    rooms-base-url: http://localhost:8089

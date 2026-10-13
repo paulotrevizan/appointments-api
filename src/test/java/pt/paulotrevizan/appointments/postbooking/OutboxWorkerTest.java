@@ -57,7 +57,7 @@ import pt.paulotrevizan.appointments.postbooking.domain.OutboxTaskType;
       "appointments.outbox.initial-backoff=100ms",
       "appointments.outbox.max-backoff=300ms",
       "appointments.outbox.max-attempts=" + OutboxWorkerTest.MAX_ATTEMPTS,
-      "appointments.integration.read-timeout=500ms"
+      "spring.http.clients.read-timeout=500ms"
     })
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
@@ -75,8 +75,8 @@ class OutboxWorkerTest {
 
   @DynamicPropertySource
   static void externalSystems(DynamicPropertyRegistry registry) {
-    registry.add("appointments.integration.calendar-base-url", externals::baseUrl);
-    registry.add("appointments.integration.rooms-base-url", externals::baseUrl);
+    registry.add("spring.http.serviceclient.calendar.base-url", externals::baseUrl);
+    registry.add("spring.http.serviceclient.rooms.base-url", externals::baseUrl);
   }
 
   private final MockMvcTester mvc;

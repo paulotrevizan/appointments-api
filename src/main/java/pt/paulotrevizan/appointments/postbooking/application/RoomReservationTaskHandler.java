@@ -19,6 +19,7 @@ class RoomReservationTaskHandler {
     Appointment appointment = appointments.findById(appointmentId).orElseThrow();
     rooms.reserve(
         appointment.getRoom().getId(),
+        appointment.getId(),
         new RoomReservation(appointment.getId(), appointment.getStartAt(), appointment.getEndAt()));
   }
 }
