@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/** D-007: slots are in the future and aligned to a grid as long as a slot. */
 @Component
 @EnableConfigurationProperties(BookingProperties.class)
 @RequiredArgsConstructor

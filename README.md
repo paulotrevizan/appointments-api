@@ -101,10 +101,7 @@ In other profiles both require HTTP Basic credentials, and the browser asks for 
 
 ### IntelliJ HTTP Client
 
-[`api.http`](api.http) has a request for the happy path and for every error case. Open it in IntelliJ,
-select the **local** environment (top right; the values come from
-[`http-client.env.json`](http-client.env.json)) and click the green arrow next to a request. The
-happy-path request picks a random future slot, so it can be run repeatedly.
+[`api.http`](api.http): choose the **local** environment and run the requests.
 
 ### curl
 

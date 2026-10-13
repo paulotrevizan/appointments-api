@@ -16,7 +16,6 @@ import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
-/** D-012: service-to-service HTTP Basic with one role per kind of caller. */
 @Configuration
 @EnableConfigurationProperties(SecurityProperties.class)
 class SecurityConfig {

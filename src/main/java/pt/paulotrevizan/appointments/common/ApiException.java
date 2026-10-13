@@ -3,7 +3,6 @@ package pt.paulotrevizan.appointments.common;
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
 
-/** Base of the domain exceptions: one subclass per error {@code code} in the HLD contract. */
 @Getter
 public abstract class ApiException extends RuntimeException {
 

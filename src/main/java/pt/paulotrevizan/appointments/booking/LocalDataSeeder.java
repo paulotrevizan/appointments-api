@@ -16,7 +16,6 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** D-024: sample reference data for local runs. Never active in production or in tests. */
 @Slf4j
 @Component
 @Profile("local")

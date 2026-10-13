@@ -42,8 +42,8 @@ class OpenApiDocumentationTest {
     assertThat(mvc.get().uri("/v3/api-docs").headers(headers))
         .hasStatusOk()
         .bodyJson()
-        .extractingPath("$.paths['/api/v1/appointments'].post.summary")
-        .isEqualTo("Book an appointment");
+        .extractingPath("$.paths['/api/v1/appointments'].post.operationId")
+        .isEqualTo("book");
   }
 
   @Test
