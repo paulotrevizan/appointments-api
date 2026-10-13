@@ -15,6 +15,9 @@ import pt.paulotrevizan.appointments.catalog.domain.Specialty;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 
+  @Query("select a from Appointment a join fetch a.room where a.id = :id")
+  Optional<Appointment> findWithRoomById(@Param("id") UUID id);
+
   @Query(
       """
       select a from Appointment a
