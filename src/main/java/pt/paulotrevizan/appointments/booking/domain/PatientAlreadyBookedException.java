@@ -10,7 +10,6 @@ public class PatientAlreadyBookedException extends ApiException {
     super(
         HttpStatus.CONFLICT,
         "PATIENT_ALREADY_BOOKED",
-        "Patient already booked",
         "The patient already has another appointment at " + startAt);
   }
 }

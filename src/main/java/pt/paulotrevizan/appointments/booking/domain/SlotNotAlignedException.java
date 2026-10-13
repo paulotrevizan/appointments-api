@@ -11,7 +11,6 @@ public class SlotNotAlignedException extends ApiException {
     super(
         HttpStatus.BAD_REQUEST,
         "SLOT_NOT_ALIGNED",
-        "Slot not aligned",
         "Slot " + startAt + " is not aligned to the " + slotDuration.toMinutes() + "-minute grid");
   }
 }

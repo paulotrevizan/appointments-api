@@ -1,7 +1,5 @@
 package pt.paulotrevizan.appointments.common.web;
 
-import java.net.URI;
-import java.util.Locale;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -20,17 +18,14 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 @RestControllerAdvice
 class ProblemDetailHandler extends ResponseEntityExceptionHandler {
 
-  private static final String TYPE_BASE = "https://api.example.com/problems/";
-
   @ExceptionHandler(ApiException.class)
   ResponseEntity<ProblemDetail> handleApiException(ApiException ex) {
-    return respond(ex.getStatus(), ex.getCode(), ex.getTitle(), ex.getMessage());
+    return respond(ex.getStatus(), ex.getCode(), ex.getMessage());
   }
 
   @ExceptionHandler(AuthenticationException.class)
   ResponseEntity<ProblemDetail> handleAuthentication(AuthenticationException ex) {
-    ProblemDetail problem =
-        problem(HttpStatus.UNAUTHORIZED, null, "Unauthorized", "Authentication is required");
+    ProblemDetail problem = problem(HttpStatus.UNAUTHORIZED, null, "Authentication is required");
     return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
         .header(HttpHeaders.WWW_AUTHENTICATE, "Basic realm=\"appointments-api\"")
         .body(problem);
@@ -38,7 +33,7 @@ class ProblemDetailHandler extends ResponseEntityExceptionHandler {
 
   @ExceptionHandler(AccessDeniedException.class)
   ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
-    return respond(HttpStatus.FORBIDDEN, null, "Forbidden", "Access is denied");
+    return respond(HttpStatus.FORBIDDEN, null, "Access is denied");
   }
 
   @Override
@@ -66,19 +61,17 @@ class ProblemDetailHandler extends ResponseEntityExceptionHandler {
 
   private ResponseEntity<Object> validationError(String detail) {
     return ResponseEntity.badRequest()
-        .body(problem(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Validation error", detail));
+        .body(problem(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", detail));
   }
 
-  private ResponseEntity<ProblemDetail> respond(
-      HttpStatus status, String code, String title, String detail) {
-    return ResponseEntity.status(status).body(problem(status, code, title, detail));
+  private ResponseEntity<ProblemDetail> respond(HttpStatus status, String code, String detail) {
+    return ResponseEntity.status(status).body(problem(status, code, detail));
   }
 
-  private ProblemDetail problem(HttpStatus status, String code, String title, String detail) {
+  // RFC 9457: no custom `type`, so it stays "about:blank" and the title is the HTTP status phrase.
+  private ProblemDetail problem(HttpStatus status, String code, String detail) {
     ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
-    problem.setTitle(title);
     if (code != null) {
-      problem.setType(URI.create(TYPE_BASE + code.toLowerCase(Locale.ROOT).replace('_', '-')));
       problem.setProperty("code", code);
     }
     return problem;

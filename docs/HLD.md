@@ -155,7 +155,9 @@ so `start_at` alone is not a unique sort key and pages would skip or repeat rows
 
 Two endpoints, one per FR that needs an API (D-015). Versioned under `/api/v1`.
 Timestamps are ISO-8601 UTC. Errors use **RFC 9457 Problem Details**
-(`application/problem+json`) with a stable `code`.
+(`application/problem+json`) with a stable `code`. Clients identify the error by `code`; `type` is
+omitted (`about:blank`) and `title` is the HTTP status phrase, as RFC 9457 recommends when there is
+no dedicated documentation page per problem type.
 
 ### 7.1 `POST /api/v1/appointments` — role `BOOKING_CLIENT` (FR 1)
 
@@ -198,8 +200,7 @@ Error example:
 
 ```json
 {
-  "type": "https://api.example.com/problems/no-doctor-available",
-  "title": "No doctor available",
+  "title": "Conflict",
   "status": 409,
   "code": "NO_DOCTOR_AVAILABLE",
   "detail": "No CARDIOLOGY doctor is free at 2026-10-20T14:00:00Z",

@@ -10,7 +10,6 @@ public class NoDoctorAvailableException extends ApiException {
     super(
         HttpStatus.CONFLICT,
         "NO_DOCTOR_AVAILABLE",
-        "No doctor available",
         "No " + specialtyCode + " doctor is free at " + startAt);
   }
 }

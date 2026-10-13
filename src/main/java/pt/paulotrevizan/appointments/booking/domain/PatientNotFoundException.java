@@ -7,10 +7,6 @@ import pt.paulotrevizan.appointments.common.web.ApiException;
 public class PatientNotFoundException extends ApiException {
 
   public PatientNotFoundException(UUID patientId) {
-    super(
-        HttpStatus.NOT_FOUND,
-        "PATIENT_NOT_FOUND",
-        "Patient not found",
-        "Patient " + patientId + " not found");
+    super(HttpStatus.NOT_FOUND, "PATIENT_NOT_FOUND", "Patient " + patientId + " not found");
   }
 }

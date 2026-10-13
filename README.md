@@ -135,12 +135,12 @@ quotes, or use Swagger UI instead.
 }
 ```
 
-Errors are RFC 9457 problem details (`application/problem+json`) with a stable `code`:
+Errors are RFC 9457 problem details (`application/problem+json`). Identify them by `code`; `title` is
+the HTTP status phrase and `detail` explains the case:
 
 ```json
 {
-  "type": "https://api.example.com/problems/slot-in-past",
-  "title": "Slot in the past",
+  "title": "Bad Request",
   "status": 400,
   "code": "SLOT_IN_PAST",
   "detail": "Slot 2020-01-07T14:00:00Z is not in the future",
