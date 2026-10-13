@@ -19,6 +19,7 @@
 		<!-- Versions outside the Spring Boot BOM -->
 		<spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
 		<google-java-format.version>1.36.1</google-java-format.version>
+		<datafaker.version>2.7.0</datafaker.version>
 	</properties>
 
 	<dependencies>
@@ -64,6 +65,12 @@
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
 			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<!-- D-024: used only by the local data seeder, but compiled with the main code -->
+			<groupId>net.datafaker</groupId>
+			<artifactId>datafaker</artifactId>
+			<version>${datafaker.version}</version>
 		</dependency>
 
 		<dependency>
