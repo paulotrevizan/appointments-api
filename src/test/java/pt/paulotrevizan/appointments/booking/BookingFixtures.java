@@ -15,7 +15,7 @@ import pt.paulotrevizan.appointments.catalog.persistence.SpecialtyRepository;
 
 /** Creates the reference data a test needs, with unique names so tests never collide. */
 @RequiredArgsConstructor
-class BookingFixtures {
+public class BookingFixtures {
 
   private final PatientRepository patients;
   private final SpecialtyRepository specialties;
@@ -23,20 +23,20 @@ class BookingFixtures {
   private final RoomRepository rooms;
   private final Clock clock;
 
-  Specialty specialty() {
+  public Specialty specialty() {
     return specialties.save(new Specialty("SPEC_" + UUID.randomUUID(), "Test specialty"));
   }
 
-  void doctors(Specialty specialty, int count) {
+  public void doctors(Specialty specialty, int count) {
     IntStream.range(0, count)
         .forEach(i -> doctors.save(new Doctor("Dr. Test", "doctor@example.com", specialty)));
   }
 
-  void rooms(int count) {
+  public void rooms(int count) {
     IntStream.range(0, count).forEach(i -> rooms.save(new Room("Room " + UUID.randomUUID())));
   }
 
-  Patient patient() {
+  public Patient patient() {
     UUID id = UUID.randomUUID();
     return patients.save(
         new Patient(id, "Ana Souza", id + "@example.com", "+351912345678", clock.instant()));

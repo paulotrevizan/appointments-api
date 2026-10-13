@@ -14,6 +14,16 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+  # External systems (HLD 7.3): one HTTP service client group each, every call bounded.
+  http:
+    clients:
+      connect-timeout: 2s
+      read-timeout: 5s
+    serviceclient:
+      calendar:
+        base-url: ${CALENDAR_BASE_URL}
+      rooms:
+        base-url: ${ROOMS_BASE_URL}
 
 server:
   shutdown: graceful
@@ -30,3 +40,14 @@ appointments:
   security:
     booking-client-password: ${BOOKING_CLIENT_PASSWORD}
     admin-password: ${ADMIN_PASSWORD}
+  outbox:
+    enabled: true
+    poll-interval: 2s
+    batch-size: 20
+    # Longer than connect + read timeout, so a slow call keeps its lease (HLD 6.2).
+    lease: 30s
+    max-attempts: 10
+    initial-backoff: 5s
+    max-backoff: 10m
+    backoff-multiplier: 2
+    backoff-jitter: 0.2
