@@ -1,41 +1,37 @@
 package pt.paulotrevizan.appointments.integration.calendar;
 
-import java.time.Instant;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.service.registry.ImportHttpServices;
 import pt.paulotrevizan.appointments.integration.HttpFailures;
-import pt.paulotrevizan.appointments.integration.IntegrationProperties;
+import pt.paulotrevizan.appointments.integration.calendar.DoctorCalendarClient.EventRequest;
 
 @Component
+@ImportHttpServices(group = "calendar", types = DoctorCalendarClient.class)
+@RequiredArgsConstructor
 class HttpDoctorCalendarGateway implements DoctorCalendarGateway {
 
   private static final String SYSTEM = "doctor calendar";
-  // No specialty or patient data: the calendar entry must not reveal health data (HLD 8).
+  // No specialty: the calendar entry must not reveal health data (HLD 8, D-027).
   private static final String EVENT_TITLE = "Medical appointment";
 
-  private final RestClient restClient;
-
-  HttpDoctorCalendarGateway(RestClient.Builder builder, IntegrationProperties properties) {
-    this.restClient = builder.baseUrl(properties.calendarBaseUrl().toString()).build();
-  }
+  private final DoctorCalendarClient client;
 
   @Override
   public void addEvent(CalendarEvent event) {
     try {
-      restClient
-          .post()
-          .uri("/doctors/{doctorId}/events", event.doctorId())
-          .header("Idempotency-Key", event.appointmentId().toString())
-          .body(
-              new EventRequest(event.appointmentId(), event.startAt(), event.endAt(), EVENT_TITLE))
-          .retrieve()
-          .toBodilessEntity();
+      client.addEvent(
+          event.doctorId(),
+          event.appointmentId(),
+          new EventRequest(
+              event.appointmentId(),
+              event.patientId(),
+              event.startAt(),
+              event.endAt(),
+              EVENT_TITLE));
     } catch (RestClientException e) {
       throw HttpFailures.classify(SYSTEM, e);
     }
   }
-
-  private record EventRequest(UUID appointmentId, Instant startAt, Instant endAt, String title) {}
 }

@@ -10,6 +10,7 @@ public record ClaimedTask(
     UUID appointmentId,
     OutboxTaskType type,
     int attempts,
+    UUID patientId,
     UUID doctorId,
     UUID roomId,
     Instant startAt,

@@ -15,5 +15,7 @@ public interface DoctorCalendarGateway {
    */
   void addEvent(CalendarEvent event);
 
-  record CalendarEvent(UUID appointmentId, UUID doctorId, Instant startAt, Instant endAt) {}
+  /** The patient is sent by id only; the clinic resolves it in the patient registry (D-027). */
+  record CalendarEvent(
+      UUID appointmentId, UUID doctorId, UUID patientId, Instant startAt, Instant endAt) {}
 }

@@ -87,6 +87,7 @@ class OutboxTaskQueueTest {
         .allSatisfy(
             task -> {
               assertThat(task.appointmentId()).isEqualTo(appointment.getId());
+              assertThat(task.patientId()).isEqualTo(appointment.getPatient().getId());
               assertThat(task.doctorId()).isEqualTo(appointment.getDoctor().getId());
               assertThat(task.roomId()).isEqualTo(appointment.getRoom().getId());
               assertThat(task.startAt()).isEqualTo(appointment.getStartAt());

@@ -35,7 +35,7 @@ public class OutboxTaskQueue {
          SET locked_until = now() + :leaseMillis * interval '1 millisecond', updated_at = now()
         FROM due, appointment a
        WHERE t.id = due.id AND a.id = t.appointment_id
-      RETURNING t.id, t.appointment_id, t.type, t.attempts,
+      RETURNING t.id, t.appointment_id, t.type, t.attempts, a.patient_id,
                 a.doctor_id, a.room_id, a.start_at, a.end_at
       """;
 
@@ -96,6 +96,7 @@ public class OutboxTaskQueue {
         row.getObject("appointment_id", UUID.class),
         OutboxTaskType.valueOf(row.getString("type")),
         row.getInt("attempts"),
+        row.getObject("patient_id", UUID.class),
         row.getObject("doctor_id", UUID.class),
         row.getObject("room_id", UUID.class),
         row.getObject("start_at", OffsetDateTime.class).toInstant(),

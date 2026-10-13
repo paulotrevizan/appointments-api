@@ -1,13 +1,11 @@
 package pt.paulotrevizan.appointments.integration;
 
 import java.net.http.HttpClient;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(IntegrationProperties.class)
 class IntegrationConfig {
 
   /**

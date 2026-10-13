@@ -99,8 +99,8 @@ class OutboxWorkerTest {
 
   @DynamicPropertySource
   static void externalSystems(DynamicPropertyRegistry registry) {
-    registry.add("appointments.integration.calendar-base-url", EXTERNAL_SYSTEMS::baseUrl);
-    registry.add("appointments.integration.room-base-url", EXTERNAL_SYSTEMS::baseUrl);
+    registry.add("spring.http.serviceclient.calendar.base-url", EXTERNAL_SYSTEMS::baseUrl);
+    registry.add("spring.http.serviceclient.room.base-url", EXTERNAL_SYSTEMS::baseUrl);
   }
 
   @AfterAll
@@ -133,10 +133,10 @@ class OutboxWorkerTest {
             .withRequestBody(
                 equalToJson(
                     """
-                    {"appointmentId": "%s", "startAt": "2035-03-05T14:00:00Z",
+                    {"appointmentId": "%s", "patientId": "%s", "startAt": "2035-03-05T14:00:00Z",
                      "endAt": "2035-03-05T14:30:00Z", "title": "Medical appointment"}
                     """
-                        .formatted(appointmentId))));
+                        .formatted(appointmentId, data.patient().getId()))));
     EXTERNAL_SYSTEMS.verify(
         exactly(1),
         postRequestedFor(urlPathEqualTo("/rooms/" + data.room().getId() + "/reservations"))

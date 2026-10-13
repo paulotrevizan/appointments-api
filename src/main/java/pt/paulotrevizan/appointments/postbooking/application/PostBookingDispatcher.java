@@ -31,7 +31,11 @@ class PostBookingDispatcher {
       case DOCTOR_CALENDAR ->
           calendar.addEvent(
               new CalendarEvent(
-                  task.appointmentId(), task.doctorId(), task.startAt(), task.endAt()));
+                  task.appointmentId(),
+                  task.doctorId(),
+                  task.patientId(),
+                  task.startAt(),
+                  task.endAt()));
       case ROOM_RESERVATION ->
           rooms.reserve(
               new RoomReservation(

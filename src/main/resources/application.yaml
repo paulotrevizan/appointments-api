@@ -18,6 +18,11 @@ spring:
     clients:
       connect-timeout: 2s
       read-timeout: 5s
+    serviceclient:
+      calendar:
+        base-url: ${CALENDAR_BASE_URL}
+      room:
+        base-url: ${ROOM_BASE_URL}
 
 server:
   shutdown: graceful
@@ -46,6 +51,3 @@ appointments:
       multiplier: 2
       max: 10m
       jitter: 1s
-  integration:
-    calendar-base-url: ${CALENDAR_BASE_URL}
-    room-base-url: ${ROOM_BASE_URL}

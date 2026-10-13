@@ -251,7 +251,7 @@ Next page: `GET /api/v1/admin/appointments?limit=20&cursor=eyJzdGFydEF0Ijoi...`
 
 | Port | Adapter call | Idempotency |
 |------|--------------|-------------|
-| `DoctorCalendarGateway.addEvent(...)` | `POST {calendar-base-url}/doctors/{doctorId}/events` body `{ appointmentId, startAt, endAt, title }` | `Idempotency-Key: {appointmentId}` |
+| `DoctorCalendarGateway.addEvent(...)` | `POST {calendar-base-url}/doctors/{doctorId}/events` body `{ appointmentId, patientId, startAt, endAt, title }` (D-027) | `Idempotency-Key: {appointmentId}` |
 | `RoomReservationGateway.reserve(...)` | `POST {rooms-base-url}/rooms/{roomId}/reservations` body `{ appointmentId, startAt, endAt }` | `Idempotency-Key: {appointmentId}` |
 | `EmailSender.send(to, subject, body)` | SMTP (fake SMTP server locally) | Task status prevents re-send after `DONE` |
 
@@ -289,7 +289,8 @@ Notes:
   current address.
 - Appointment data is **health data** (a specialty can reveal a condition — GDPR special
   category). The email carries only what the FR requires (date/time, doctor name, room), not
-  the specialty; logs carry ids only, never names, emails or specialties.
+  the specialty; logs carry ids only, never names, emails or specialties. The doctor calendar
+  receives the patient by id only (D-027); the room system receives no patient data.
 
 ## 9. Non-functional view
 

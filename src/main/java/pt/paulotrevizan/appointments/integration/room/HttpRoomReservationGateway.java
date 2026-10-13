@@ -1,40 +1,31 @@
 package pt.paulotrevizan.appointments.integration.room;
 
-import java.time.Instant;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.service.registry.ImportHttpServices;
 import pt.paulotrevizan.appointments.integration.HttpFailures;
-import pt.paulotrevizan.appointments.integration.IntegrationProperties;
+import pt.paulotrevizan.appointments.integration.room.RoomReservationClient.ReservationRequest;
 
 @Component
+@ImportHttpServices(group = "room", types = RoomReservationClient.class)
+@RequiredArgsConstructor
 class HttpRoomReservationGateway implements RoomReservationGateway {
 
   private static final String SYSTEM = "room reservation";
 
-  private final RestClient restClient;
-
-  HttpRoomReservationGateway(RestClient.Builder builder, IntegrationProperties properties) {
-    this.restClient = builder.baseUrl(properties.roomBaseUrl().toString()).build();
-  }
+  private final RoomReservationClient client;
 
   @Override
   public void reserve(RoomReservation reservation) {
     try {
-      restClient
-          .post()
-          .uri("/rooms/{roomId}/reservations", reservation.roomId())
-          .header("Idempotency-Key", reservation.appointmentId().toString())
-          .body(
-              new ReservationRequest(
-                  reservation.appointmentId(), reservation.startAt(), reservation.endAt()))
-          .retrieve()
-          .toBodilessEntity();
+      client.reserve(
+          reservation.roomId(),
+          reservation.appointmentId(),
+          new ReservationRequest(
+              reservation.appointmentId(), reservation.startAt(), reservation.endAt()));
     } catch (RestClientException e) {
       throw HttpFailures.classify(SYSTEM, e);
     }
   }
-
-  private record ReservationRequest(UUID appointmentId, Instant startAt, Instant endAt) {}
 }

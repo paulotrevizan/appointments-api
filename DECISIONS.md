@@ -32,6 +32,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
 | D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
+| D-027 | The doctor calendar receives the patient id, never patient details | Accepted | 2026-10-13 |
 
 ---
 
@@ -79,7 +80,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 - **Context:** Are retry and circuit breaker enough to deal with unavailable external systems?
 - **Decision:** No — durability comes from the outbox (D-004). Retries are scheduled by the outbox with exponential backoff + jitter; after N attempts the task is `FAILED` and alerts. Adapters apply timeouts only (`spring.http.clients.connect-timeout` / `read-timeout`) and speak HTTP/1.1. On plain `http://` the JDK client would otherwise try an h2c upgrade, which many servers and proxies cancel.
-  - The delay must survive restarts, so it is persisted as `next_attempt_at` instead of an in-memory `@Retryable`. Its value comes from Spring's `ExponentialBackOff`: 5 s × 2 per attempt, capped at 10 min. Its jitter grows with the interval, which gives the ±20 %.
+  - The delay must survive restarts, so it is persisted as `next_attempt_at` instead of an in-memory `@Retryable`. The rules are a Spring `RetryPolicy` (`OutboxRetrySchedule`): retry only retryable `IntegrationException`s, at most `max-attempts`, with an exponential backoff of 5 s × 2 per attempt capped at 10 min. Spring's jitter grows with the interval, which gives the ±20 %. The policy's backoff returns `STOP` once the attempts are used up, and the task becomes `FAILED`.
 - **Why no circuit breaker:** the booking path never calls externals, so there is no user-facing latency to protect; the outbox backoff already stops hammering a failing system. At ~1 req/s a breaker adds a dependency and configuration without measurable benefit.
 - **Trade-offs:** ➕ a single place that controls retries (no retry storms from stacked layers), fewer moving parts, predictable behaviour. ➖ during a long outage each due task still makes one (timed-out) call per backoff step.
 - **Revisit when:** post-booking volume grows enough that failing calls consume worker capacity.
@@ -88,6 +89,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 - **Context:** Should we build the external systems or just interfaces?
 - **Decision:** Domain ports (`DoctorCalendarGateway`, `RoomReservationGateway`, `EmailSender`) with real HTTP/SMTP adapters; the external systems are simulated (HTTP mock and fake SMTP) in local and test environments.
+  - Naming: a *Gateway* is the port the application depends on (Fowler's Gateway pattern); a *Client* is the HTTP contract behind it. The HTTP side uses Spring's declarative HTTP Service Clients: `@PostExchange` interfaces (`DoctorCalendarClient`, `RoomReservationClient`) registered with `@ImportHttpServices` and configured per group (`spring.http.serviceclient.calendar.base-url`, `…room.base-url`). The gateway adapter only maps HTTP failures to D-017 outcomes.
 - **Trade-offs:** ➕ integration points are real and swappable, behaviour is testable end-to-end. ➖ outbound contracts are assumed by us and must be aligned with the real systems.
 
 ## D-007 — Fixed 30-minute slots aligned to the grid
@@ -211,6 +213,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Decision:** Spring Data JPA (Hibernate) for entities and simple queries; explicit `@Query` (JPQL, or native SQL for PostgreSQL-specific operations such as the outbox claim). Flyway owns the schema (`ddl-auto: validate`). Rules: `open-in-view: false`, `LAZY` associations, fetch joins where a response needs related data, no bidirectional associations, constraint names mapped explicitly to domain errors.
 - **Trade-offs:** ➕ familiar to most Java teams, less boilerplate for CRUD and pagination. ➖ JPA hides SQL and invites N+1 and lazy-loading surprises — contained by the rules above; PostgreSQL-specific parts are native SQL anyway.
 - **Why not `JdbcClient`:** fully explicit, but more hand-written mapping code for a team used to JPA.
+- **Exception — the outbox queue:** `OutboxTaskQueue` uses `JdbcClient`. Its operations are PostgreSQL statements with no JPA equivalent: a CTE with `FOR UPDATE SKIP LOCKED`, `UPDATE … RETURNING` into a non-entity record, and database-clock arithmetic (`now() + interval`). In Spring Data they would need native `UPDATE … RETURNING` through `getResultList`, overriding the repositories' read-only transactions, an extra fetch-join query and a projection. Creating tasks stays in JPA (`OutboxTask`, `OutboxTaskRepository`).
 
 ## D-021 — Layered architecture, packaged by feature; interfaces only at external boundaries
 
@@ -266,3 +269,14 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Decision:** B. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. The document is generated from the code; the only hand-written parts are the Basic scheme and a request example, in `OpenApiConfig`.
 - **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, no annotations in controllers or DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; error codes are not in the generated document (they are in the README).
 - **Revisit when:** the API needs richer documentation (error responses, descriptions) — add annotations or a separate OpenAPI file.
+
+## D-027 — The doctor calendar receives the patient id, never patient details
+
+- **Context:** The doctor has to know who the appointment is for, yet the calendar system is outside this service, and an appointment linked to a person is health data (GDPR / LGPD special category, HLD 8).
+- **Options:**
+  - A) Send nothing about the patient (only the appointment).
+  - B) Send the `patientId`, a pseudonymous reference to the patient registry.
+  - C) Send name and contact details.
+- **Decision:** B. `POST /doctors/{doctorId}/events` carries `patientId`; the clinic systems resolve it in the patient registry, which already holds the details (HLD A5). The room system gets no patient data, and the event title stays generic ("Medical appointment", no specialty).
+- **Trade-offs:** ➕ the doctor can see who is coming; no names, emails or phones leave this service; a patient's data is changed or erased in one place. ➖ the calendar system needs access to the patient registry to show a name.
+- **Why not A:** the calendar would be useless for its main purpose. **Why not C:** copies PII into another system for no gain over B.

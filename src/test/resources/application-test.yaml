@@ -1,4 +1,10 @@
 spring:
+  http:
+    serviceclient:
+      calendar:
+        base-url: http://localhost:9
+      room:
+        base-url: http://localhost:9
   main:
     banner-mode: off
 
@@ -9,6 +15,3 @@ appointments:
   outbox:
     worker:
       enabled: false
-  integration:
-    calendar-base-url: http://localhost:9
-    room-base-url: http://localhost:9

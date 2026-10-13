@@ -35,7 +35,8 @@ decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
 
 - Java 25 (virtual threads enabled), Maven Wrapper, Spring Boot 4.1.x (latest stable).
 - PostgreSQL 18, Flyway, Spring Data JPA (Hibernate).
-- Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, `RestClient`, Actuator + Micrometer.
+- Spring Web MVC, Spring Security (HTTP Basic), Spring Mail, `RestClient` through HTTP Service
+  Clients (`@HttpExchange`), Actuator + Micrometer.
 - Lombok (restricted, see below). Datafaker for the local data seeder only (D-024).
 - springdoc-openapi for the OpenAPI document and Swagger UI (D-026).
 - Tests: JUnit 5, AssertJ, Testcontainers (PostgreSQL), WireMock, GreenMail, Awaitility.
@@ -78,7 +79,9 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
 - Business rules live in `@Service` classes: stateless, small focused methods, unit-testable.
 - Repositories are simple: queries only, no business logic.
 - Interfaces **only** for the three external systems (`DoctorCalendarGateway`,
-  `RoomReservationGateway`, `EmailSender`). No interface-per-service.
+  `RoomReservationGateway`, `EmailSender`) and for the declarative HTTP clients Spring generates
+  behind them (`@HttpExchange` interfaces such as `DoctorCalendarClient`, registered with
+  `@ImportHttpServices`). No interface-per-service.
 - DTOs are Java `records`, mapped manually (static `from(...)` factory on the response record
   or a small mapper class next to the controller). No MapStruct, no Spring Data projections.
 
@@ -86,9 +89,10 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
 
 - Constructor injection for every dependency, fields `private final`. **Never `@Autowired`**
   on fields or setters. Use Lombok `@RequiredArgsConstructor`.
-- Lombok allowed: `@RequiredArgsConstructor`, `@Slf4j`, and on JPA entities only `@Getter` +
+- Lombok allowed: `@RequiredArgsConstructor`, `@Slf4j`, `@Getter` on classes whose fields are all
+  `final` or that are JPA entities (entities, exceptions), and on JPA entities
   `@NoArgsConstructor(access = AccessLevel.PROTECTED)`. **Not allowed:** `@Data`, `@Setter`,
-  `@Builder`, `@EqualsAndHashCode`, `@ToString` on entities.
+  `@Builder`, `@EqualsAndHashCode`, `@ToString` on entities. Records need none of it.
 - Entities change state through intention-revealing methods (`markDone()`, `scheduleRetry(...)`),
   not setters.
 - KISS first: short, readable code over clever abstractions. DRY with restraint — a little
@@ -122,9 +126,10 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
   **outside** the transaction: one transaction per attempt via `TransactionTemplate`; use
   `saveAndFlush` so constraint violations surface inside the attempt (D-003). Never rely on
   calling a `@Transactional` method through `this`.
-- Outbox retries are persisted, not in memory: the delay comes from Spring's `ExponentialBackOff`
-  and is stored as `next_attempt_at` with the database clock (D-005). Outbox state changes are
-  single SQL statements in `OutboxTaskQueue` for that reason.
+- Outbox retries are persisted, not in memory: a Spring `RetryPolicy` decides whether and when to
+  retry, and the delay is stored as `next_attempt_at` with the database clock (D-005). Outbox
+  state changes are single SQL statements in `OutboxTaskQueue` (`JdbcClient`) for that reason
+  (D-020).
 - No pessimistic, advisory or `SERIALIZABLE` locking for bookings: the slot invariants are unique
   indexes and conflicts are retried (D-002, D-003).
 
