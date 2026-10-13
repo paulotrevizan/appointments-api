@@ -9,10 +9,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
 import pt.paulotrevizan.appointments.booking.domain.PatientNotFoundException;
 import pt.paulotrevizan.appointments.booking.domain.SpecialtyNotFoundException;
-import pt.paulotrevizan.appointments.catalog.Patient;
-import pt.paulotrevizan.appointments.catalog.PatientRepository;
-import pt.paulotrevizan.appointments.catalog.Specialty;
-import pt.paulotrevizan.appointments.catalog.SpecialtyRepository;
+import pt.paulotrevizan.appointments.catalog.domain.Patient;
+import pt.paulotrevizan.appointments.catalog.domain.Specialty;
+import pt.paulotrevizan.appointments.catalog.persistence.PatientRepository;
+import pt.paulotrevizan.appointments.catalog.persistence.SpecialtyRepository;
 
 @Slf4j
 @Service

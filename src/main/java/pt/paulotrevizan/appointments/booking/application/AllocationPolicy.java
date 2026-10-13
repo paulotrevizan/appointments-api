@@ -7,9 +7,9 @@ import org.springframework.stereotype.Service;
 import pt.paulotrevizan.appointments.booking.domain.NoDoctorAvailableException;
 import pt.paulotrevizan.appointments.booking.domain.NoRoomAvailableException;
 import pt.paulotrevizan.appointments.booking.persistence.AppointmentRepository;
-import pt.paulotrevizan.appointments.catalog.Doctor;
-import pt.paulotrevizan.appointments.catalog.Room;
-import pt.paulotrevizan.appointments.catalog.Specialty;
+import pt.paulotrevizan.appointments.catalog.domain.Doctor;
+import pt.paulotrevizan.appointments.catalog.domain.Room;
+import pt.paulotrevizan.appointments.catalog.domain.Specialty;
 
 /** D-009: doctor with the fewest appointments that day (tie: id); room: first free (by id). */
 @Service

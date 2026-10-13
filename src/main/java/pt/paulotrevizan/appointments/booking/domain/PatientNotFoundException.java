@@ -2,7 +2,7 @@ package pt.paulotrevizan.appointments.booking.domain;
 
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
-import pt.paulotrevizan.appointments.common.ApiException;
+import pt.paulotrevizan.appointments.common.web.ApiException;
 
 public class PatientNotFoundException extends ApiException {
 

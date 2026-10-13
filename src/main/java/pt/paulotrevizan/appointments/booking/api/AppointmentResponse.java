@@ -4,9 +4,9 @@ import java.time.Instant;
 import java.util.UUID;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
 import pt.paulotrevizan.appointments.booking.domain.AppointmentStatus;
-import pt.paulotrevizan.appointments.catalog.Doctor;
-import pt.paulotrevizan.appointments.catalog.Patient;
-import pt.paulotrevizan.appointments.catalog.Room;
+import pt.paulotrevizan.appointments.catalog.domain.Doctor;
+import pt.paulotrevizan.appointments.catalog.domain.Patient;
+import pt.paulotrevizan.appointments.catalog.domain.Room;
 
 public record AppointmentResponse(
     UUID id,

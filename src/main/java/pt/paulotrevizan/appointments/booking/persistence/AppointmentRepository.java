@@ -7,9 +7,9 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
-import pt.paulotrevizan.appointments.catalog.Doctor;
-import pt.paulotrevizan.appointments.catalog.Room;
-import pt.paulotrevizan.appointments.catalog.Specialty;
+import pt.paulotrevizan.appointments.catalog.domain.Doctor;
+import pt.paulotrevizan.appointments.catalog.domain.Room;
+import pt.paulotrevizan.appointments.catalog.domain.Specialty;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 

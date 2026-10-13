@@ -7,11 +7,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
 import pt.paulotrevizan.appointments.booking.persistence.AppointmentRepository;
-import pt.paulotrevizan.appointments.catalog.Doctor;
-import pt.paulotrevizan.appointments.catalog.Patient;
-import pt.paulotrevizan.appointments.catalog.Room;
-import pt.paulotrevizan.appointments.catalog.Specialty;
-import pt.paulotrevizan.appointments.postbooking.PostBookingTasks;
+import pt.paulotrevizan.appointments.catalog.domain.Doctor;
+import pt.paulotrevizan.appointments.catalog.domain.Patient;
+import pt.paulotrevizan.appointments.catalog.domain.Room;
+import pt.paulotrevizan.appointments.catalog.domain.Specialty;
+import pt.paulotrevizan.appointments.postbooking.application.PostBookingTasks;
 
 @Service
 @RequiredArgsConstructor

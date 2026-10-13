@@ -3,7 +3,7 @@ package pt.paulotrevizan.appointments.booking.domain;
 import java.time.Duration;
 import java.time.Instant;
 import org.springframework.http.HttpStatus;
-import pt.paulotrevizan.appointments.common.ApiException;
+import pt.paulotrevizan.appointments.common.web.ApiException;
 
 public class SlotNotAlignedException extends ApiException {
 
