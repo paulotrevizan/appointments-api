@@ -3,7 +3,7 @@ package pt.paulotrevizan.appointments.postbooking;
 import java.util.Arrays;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import pt.paulotrevizan.appointments.booking.Appointment;
+import pt.paulotrevizan.appointments.booking.domain.Appointment;
 
 @Component
 @RequiredArgsConstructor

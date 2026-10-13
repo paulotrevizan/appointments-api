@@ -13,7 +13,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import pt.paulotrevizan.appointments.booking.Appointment;
+import pt.paulotrevizan.appointments.booking.domain.Appointment;
 import pt.paulotrevizan.appointments.common.BaseEntity;
 
 @Entity

@@ -48,8 +48,13 @@ decisions are proposed as a new `DECISIONS.md` entry and wait for approval.
 Layered, packaged by feature (D-021). Maven coordinates `pt.paulotrevizan:appointments-api`; base package `pt.paulotrevizan.appointments`.
 
 ```
-booking/      controller + request/response records + controller-level error mapping,
-              BookingService, AllocationPolicy, repositories, entities, domain exceptions
+catalog/      reference data (read copies, HLD A5): Patient, Doctor, Room, Specialty entities +
+              repositories, LocalDataSeeder
+booking/
+  api/          BookingController + request/response records
+  application/  BookingService, AllocationPolicy, SlotPolicy (business rules, transactions)
+  domain/       Appointment entity, AppointmentStatus, domain exceptions
+  persistence/  AppointmentRepository (including the availability queries)
 admin/        AdminAppointmentController + DTOs, AdminAppointmentService, CursorCodec
 postbooking/  OutboxWorker, OutboxTask entity + repository, task handlers, RetryPolicy
 integration/  calendar/, room/, email/ — one port interface + one adapter each
@@ -57,6 +62,8 @@ common/       ProblemDetail handler, security config, Clock bean, shared config
 ```
 
 - Controller → Service → Repository. **Controllers never call repositories.**
+- Inside a feature: `api` → `application` → `domain` / `persistence`. `catalog` never depends on
+  `booking`; queries that combine reference data with appointments live in `booking/persistence`.
 - Controllers are thin: validate the request shape, call one service method, map the result.
 - Business rules live in `@Service` classes: stateless, small focused methods, unit-testable.
 - Repositories are simple: queries only, no business logic.

@@ -18,11 +18,11 @@ import org.springframework.core.env.Environment;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.support.TransactionTemplate;
 import pt.paulotrevizan.appointments.TestcontainersConfiguration;
-import pt.paulotrevizan.appointments.booking.Appointment;
-import pt.paulotrevizan.appointments.booking.Doctor;
-import pt.paulotrevizan.appointments.booking.Patient;
-import pt.paulotrevizan.appointments.booking.Room;
-import pt.paulotrevizan.appointments.booking.Specialty;
+import pt.paulotrevizan.appointments.booking.domain.Appointment;
+import pt.paulotrevizan.appointments.catalog.Doctor;
+import pt.paulotrevizan.appointments.catalog.Patient;
+import pt.paulotrevizan.appointments.catalog.Room;
+import pt.paulotrevizan.appointments.catalog.Specialty;
 
 @SpringBootTest
 @ActiveProfiles("test")

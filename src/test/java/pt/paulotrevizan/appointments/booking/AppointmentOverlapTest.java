@@ -19,6 +19,17 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.ActiveProfiles;
 import pt.paulotrevizan.appointments.TestcontainersConfiguration;
+import pt.paulotrevizan.appointments.booking.domain.Appointment;
+import pt.paulotrevizan.appointments.booking.domain.AppointmentStatus;
+import pt.paulotrevizan.appointments.booking.persistence.AppointmentRepository;
+import pt.paulotrevizan.appointments.catalog.Doctor;
+import pt.paulotrevizan.appointments.catalog.DoctorRepository;
+import pt.paulotrevizan.appointments.catalog.Patient;
+import pt.paulotrevizan.appointments.catalog.PatientRepository;
+import pt.paulotrevizan.appointments.catalog.Room;
+import pt.paulotrevizan.appointments.catalog.RoomRepository;
+import pt.paulotrevizan.appointments.catalog.Specialty;
+import pt.paulotrevizan.appointments.catalog.SpecialtyRepository;
 
 @SpringBootTest
 @ActiveProfiles("test")
