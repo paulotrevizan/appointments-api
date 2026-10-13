@@ -24,6 +24,9 @@ import pt.paulotrevizan.appointments.common.persistence.BaseEntity;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Appointment extends BaseEntity {
 
+  // D-007: fixed by the schema (appointment_fixed_duration_check, appointment_grid_check).
+  public static final Duration SLOT_DURATION = Duration.ofMinutes(30);
+
   @Id private UUID id;
 
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -57,7 +60,6 @@ public class Appointment extends BaseEntity {
       Doctor doctor,
       Room room,
       Instant startAt,
-      Duration duration,
       Instant now) {
     this.id = UUID.randomUUID();
     this.patient = patient;
@@ -65,7 +67,7 @@ public class Appointment extends BaseEntity {
     this.doctor = doctor;
     this.room = room;
     this.startAt = startAt;
-    this.endAt = startAt.plus(duration);
+    this.endAt = startAt.plus(SLOT_DURATION);
     this.status = AppointmentStatus.CONFIRMED;
     this.createdAt = now;
     this.updatedAt = now;

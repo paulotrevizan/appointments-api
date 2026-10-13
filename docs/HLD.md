@@ -17,11 +17,11 @@ exists to protect one of them.
 
 | # | Invariant | Enforced by |
 |---|-----------|-------------|
-| **I1** | A doctor never has two active appointments overlapping in time | PostgreSQL exclusion constraint |
-| **I2** | A room never has two active appointments overlapping in time | PostgreSQL exclusion constraint |
+| **I1** | A doctor never has two active appointments overlapping in time | PostgreSQL partial unique index on fixed, grid-aligned slots (D-002) |
+| **I2** | A room never has two active appointments overlapping in time | PostgreSQL partial unique index on fixed, grid-aligned slots (D-002) |
 | **I3** | The assigned doctor always has the requested specialty | Allocation query: only doctors of the requested specialty are candidates |
 | **I4** | A confirmed appointment never loses its post-booking actions (they may be delayed, never dropped) | Transactional outbox (same DB transaction) |
-| **I5** | A patient never has two active appointments overlapping in time — which also makes client retries (double click, timeout, new tab) safe | PostgreSQL exclusion constraint |
+| **I5** | A patient never has two active appointments overlapping in time — which also makes client retries (double click, timeout, new tab) safe | PostgreSQL partial unique index on fixed, grid-aligned slots (D-002) |
 
 > I1, I2 and I5 are guaranteed by the database, not by the application or the client. It
 > does not matter how many instances run, how many concurrent requests arrive or how the
@@ -89,18 +89,18 @@ Single deployable Spring Boot service (modular monolith) + PostgreSQL. No messag
 
 1. Validate: future time, aligned to the 30-min grid, patient exists,
    specialty exists (local lookups, same database — no extra network round trip).
-2. Duplicate check — does the patient already have a confirmed appointment at that slot?
-   - same specialty → it is a retry: return the existing appointment (**200**);
-   - different specialty → **409** `PATIENT_ALREADY_BOOKED`.
-3. Query candidate doctors (specialty, active, no overlapping appointment) ordered by load
-   that day, and candidate rooms (active, no overlap).
-4. In **one transaction**: `INSERT appointment` (first doctor, first room) + `INSERT` 3
-   `outbox_task` rows → `COMMIT`.
-5. If PostgreSQL rejects with an exclusion violation:
-   - on doctor or room (another request won the race) → drop that candidate and retry with
-     the next one (**max 3 attempts**);
-   - on patient (two concurrent retries of the same request) → apply step 2 again.
-6. No candidates left → **409** (`NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE`).
+2. **Attempt**, in one transaction:
+   1. Duplicate check — does the patient already have a confirmed appointment at that slot?
+      - same specialty → it is a retry: return the existing appointment (**201**, the same
+        body as the original response);
+      - different specialty → **409** `PATIENT_ALREADY_BOOKED`.
+   2. Query candidate doctors (specialty, active, no appointment at that slot) ordered by load
+      that day, and candidate rooms (active, free at that slot).
+   3. `INSERT appointment` (first doctor, first room) + `INSERT` 3 `outbox_task` rows → `COMMIT`.
+3. If PostgreSQL rejects the insert on a slot index (another request committed first), the
+   attempt is retried with fresh candidates (**max 3 attempts**, D-003). An identical request
+   that lost the race finds the winner's appointment in step 2.1.
+4. No candidate left, or attempts used up → **409** (`NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE`).
    Success → **201** with the full appointment: doctor, room **and patient details**, so the
    client never needs a follow-up call.
 
@@ -187,7 +187,7 @@ read-by-id endpoint).
 | Status | `code` | When |
 |--------|--------|------|
 | 201 | — | Booked |
-| 200 | — | Retry: the patient already has this appointment (same slot + specialty); same body as the original 201 |
+| 201 | — | Retry: the patient already has this appointment (same slot + specialty); same body as the original response |
 | 400 | `VALIDATION_ERROR`, `SLOT_IN_PAST`, `SLOT_NOT_ALIGNED` | Invalid input |
 | 401 / 403 | — | Not authenticated / wrong role |
 | 404 | `PATIENT_NOT_FOUND`, `SPECIALTY_NOT_FOUND` | Unknown patient or specialty |
@@ -271,7 +271,7 @@ APPOINTMENT 1 ── 3 OUTBOX_TASK
 | `specialty` | `id`, `code`, `name` | `code` unique |
 | `doctor` | `id`, `name`, `email`, `specialty_id`, `active` | FK specialty |
 | `room` | `id`, `name`, `active` | `name` unique |
-| `appointment` | `id`, `patient_id`, `specialty_id`, `doctor_id`, `room_id`, `start_at`, `end_at`, `slot` (generated `tstzrange(start_at, end_at, '[)')`), `status`, `created_at`, `updated_at` | **I1:** `EXCLUDE USING gist (doctor_id WITH =, slot WITH &&) WHERE (status = 'CONFIRMED')` · **I2:** same for `room_id` · **I5:** same for `patient_id` · index on (`start_at`, `id`) for the admin listing |
+| `appointment` | `id`, `patient_id`, `specialty_id`, `doctor_id`, `room_id`, `start_at`, `end_at`, `status`, `created_at`, `updated_at` | **I1:** unique (`doctor_id`, `start_at`) `WHERE status = 'CONFIRMED'` · **I2:** same for `room_id` · **I5:** same for `patient_id` · `CHECK` `end_at - start_at = 30 min` and `start_at` on the :00 / :30 grid (D-002, D-007) · index on (`start_at`, `id`) for the admin listing |
 | `outbox_task` | `id`, `appointment_id`, `type` (`DOCTOR_CALENDAR` / `ROOM_RESERVATION` / `EMAIL`), `status` (`PENDING` / `DONE` / `FAILED`), `attempts`, `next_attempt_at`, `locked_until`, `last_error`, `created_at`, `updated_at` | FK appointment · unique (`appointment_id`, `type`) · index on (`status`, `next_attempt_at`) |
 
 Notes:
@@ -319,7 +319,7 @@ Notes:
 | # | We chose | We gave up | Why it is acceptable |
 |---|----------|------------|----------------------|
 | T1 | Our DB as source of truth + async propagation (D-001) | Immediate consistency with calendar/room systems: the patient can be confirmed for a room the external system later rejects | Booking never depends on 3 external systems; rejections are visible (`FAILED`) and rare under A1 |
-| T2 | Invariants in PostgreSQL (exclusion constraints, `SKIP LOCKED`) | Database portability; tests need a real PostgreSQL | Correctness of the core rule beats portability; PostgreSQL is a safe long-term choice |
+| T2 | Invariants in PostgreSQL (partial unique indexes, `CHECK` constraints, `SKIP LOCKED`) | Database portability; tests need a real PostgreSQL | Correctness of the core rule beats portability; PostgreSQL is a safe long-term choice |
 | T3 | Polling outbox, no broker (D-004, D-014) | Seconds of latency on post-booking actions; constant light polling load | No extra infrastructure to run; broker is a clear evolution path |
 | T4 | Local read copies of patients/doctors/rooms (A5) | Freshness: a change upstream is only seen after sync; the sync itself is assumed, not built | Keeps booking fast and self-contained; same pattern for all reference data |
 | T5 | Greedy allocation, one request at a time (D-009) | Global optimality (e.g. packing doctors to leave whole days free) | Rooms are generic and doctors interchangeable within a specialty |
@@ -331,9 +331,9 @@ Notes:
 | What fails | When | What happens | Invariant kept |
 |------------|------|--------------|----------------|
 | Instance crashes | Before commit | Nothing persisted; client retry books normally | I1, I2, I4, I5 |
-| Instance crashes | After commit, before response | Booking + outbox exist; client retry gets **200** with the same appointment | I5, I4 |
-| Two identical requests | Concurrently | One gets 201, the other hits I5 → re-check → 200 | I5 |
-| Many requests, same slot | Concurrently | Constraint rejects losers → next candidate (max 3) → 201 or 409 | I1, I2 |
+| Instance crashes | After commit, before response | Booking + outbox exist; client retry gets **201** with the same appointment | I5, I4 |
+| Two identical requests | Concurrently | One inserts; the other hits the slot index, is retried and finds the first appointment → both get 201 with the same body | I5 |
+| Many requests, same slot | Concurrently | The slot index rejects losers → retried with fresh candidates (max 3 attempts) → 201 or 409 | I1, I2 |
 | Worker crashes | During an external call | Lease expires → task claimed again → external dedups by appointment id | I4 |
 | External system down | For hours | Tasks back off; booking keeps working; after N attempts `FAILED` + alert | I4 (nothing lost) |
 | External rejects (4xx) | Any time | Non-retryable → `FAILED` immediately + alert → manual reconciliation | I4 (visible, not silent) |
@@ -347,7 +347,7 @@ thresholds are set once real traffic is observed — not invented upfront.
 
 | Signal | Use |
 |--------|-----|
-| Booking requests by outcome (201 / 200 / 4xx / 5xx) and latency | Health of the booking API |
+| Booking requests by outcome (201 / 4xx / 5xx, repeated requests) and latency | Health of the booking API |
 | Age of oldest `PENDING` outbox task | Post-booking freshness — the main alert candidate |
 | Count of `FAILED` tasks | Something needs a human — alert candidate |
 | `NO_DOCTOR_AVAILABLE` / `NO_ROOM_AVAILABLE` rate | Capacity signal for the business, not an incident |

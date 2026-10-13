@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -105,13 +104,7 @@ class OutboxTaskMappingTest {
           Room room = new Room("Room " + UUID.randomUUID());
           Appointment appointment =
               new Appointment(
-                  patient,
-                  specialty,
-                  doctor,
-                  room,
-                  Instant.parse("2030-01-07T14:00:00Z"),
-                  Duration.ofMinutes(30),
-                  now);
+                  patient, specialty, doctor, room, Instant.parse("2030-01-07T14:00:00Z"), now);
           List.of(patient, specialty, doctor, room, appointment).forEach(entityManager::persist);
           for (OutboxTaskType type : OutboxTaskType.values()) {
             entityManager.persist(new OutboxTask(appointment, type));

@@ -344,7 +344,7 @@ class BookAppointmentTest {
   private Appointment save(
       Patient patient, Specialty specialty, Doctor doctor, Room room, Instant startAt) {
     return appointments.saveAndFlush(
-        new Appointment(patient, specialty, doctor, room, startAt, SLOT, clock.instant()));
+        new Appointment(patient, specialty, doctor, room, startAt, clock.instant()));
   }
 
   private Specialty newSpecialty() {

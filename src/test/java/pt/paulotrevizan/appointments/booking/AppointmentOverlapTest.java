@@ -11,12 +11,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.ActiveProfiles;
 import pt.paulotrevizan.appointments.TestcontainersConfiguration;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
@@ -45,6 +44,7 @@ class AppointmentOverlapTest {
   private final RoomRepository rooms;
   private final AppointmentRepository appointments;
   private final Clock clock;
+  private final JdbcClient jdbc;
 
   private Specialty specialty;
 
@@ -54,13 +54,15 @@ class AppointmentOverlapTest {
       @Autowired DoctorRepository doctors,
       @Autowired RoomRepository rooms,
       @Autowired AppointmentRepository appointments,
-      @Autowired Clock clock) {
+      @Autowired Clock clock,
+      @Autowired JdbcClient jdbc) {
     this.patients = patients;
     this.specialties = specialties;
     this.doctors = doctors;
     this.rooms = rooms;
     this.appointments = appointments;
     this.clock = clock;
+    this.jdbc = jdbc;
   }
 
   @BeforeEach
@@ -68,46 +70,66 @@ class AppointmentOverlapTest {
     specialty = specialties.save(new Specialty("SPEC_" + UUID.randomUUID(), "Test specialty"));
   }
 
-  @ParameterizedTest(name = "second appointment starts {0} min after the first")
-  @ValueSource(longs = {0, 15})
+  @Test
   @DisplayName("I1: a doctor is never double-booked")
-  void givenDoctorBooked_whenSameDoctorOverlaps_thenRejectedByDoctorConstraint(long offset) {
+  void givenDoctorBooked_whenSameDoctorSameSlot_thenRejectedByDoctorConstraint() {
     Doctor doctor = newDoctor();
     book(newPatient(), doctor, newRoom(), START);
 
-    assertThatThrownBy(
-            () -> book(newPatient(), doctor, newRoom(), START.plus(Duration.ofMinutes(offset))))
+    assertThatThrownBy(() -> book(newPatient(), doctor, newRoom(), START))
         .isInstanceOf(DataIntegrityViolationException.class)
         .rootCause()
         .hasMessageContaining("appointment_doctor_no_overlap");
   }
 
-  @ParameterizedTest(name = "second appointment starts {0} min after the first")
-  @ValueSource(longs = {0, 15})
+  @Test
   @DisplayName("I2: a room is never double-booked")
-  void givenRoomBooked_whenSameRoomOverlaps_thenRejectedByRoomConstraint(long offset) {
+  void givenRoomBooked_whenSameRoomSameSlot_thenRejectedByRoomConstraint() {
     Room room = newRoom();
     book(newPatient(), newDoctor(), room, START);
 
-    assertThatThrownBy(
-            () -> book(newPatient(), newDoctor(), room, START.plus(Duration.ofMinutes(offset))))
+    assertThatThrownBy(() -> book(newPatient(), newDoctor(), room, START))
         .isInstanceOf(DataIntegrityViolationException.class)
         .rootCause()
         .hasMessageContaining("appointment_room_no_overlap");
   }
 
-  @ParameterizedTest(name = "second appointment starts {0} min after the first")
-  @ValueSource(longs = {0, 15})
+  @Test
   @DisplayName("I5: a patient is never double-booked")
-  void givenPatientBooked_whenSamePatientOverlaps_thenRejectedByPatientConstraint(long offset) {
+  void givenPatientBooked_whenSamePatientSameSlot_thenRejectedByPatientConstraint() {
     Patient patient = newPatient();
     book(patient, newDoctor(), newRoom(), START);
 
-    assertThatThrownBy(
-            () -> book(patient, newDoctor(), newRoom(), START.plus(Duration.ofMinutes(offset))))
+    assertThatThrownBy(() -> book(patient, newDoctor(), newRoom(), START))
         .isInstanceOf(DataIntegrityViolationException.class)
         .rootCause()
         .hasMessageContaining("appointment_patient_no_overlap");
+  }
+
+  @Test
+  @DisplayName("D-002: a start off the 30-minute grid is rejected by the database")
+  void givenStartOffGrid_whenInserted_thenRejectedByGridCheck() {
+    assertThatThrownBy(
+            () -> book(newPatient(), newDoctor(), newRoom(), START.plus(Duration.ofMinutes(15))))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .rootCause()
+        .hasMessageContaining("appointment_grid_check");
+  }
+
+  @Test
+  @DisplayName("D-002: an appointment that is not 30 minutes long is rejected by the database")
+  void givenAppointment_whenDurationChanged_thenRejectedByDurationCheck() {
+    Appointment appointment = book(newPatient(), newDoctor(), newRoom(), START);
+
+    assertThatThrownBy(
+            () ->
+                jdbc.sql(
+                        "UPDATE appointment SET end_at = end_at + interval '15 minutes' WHERE id = :id")
+                    .param("id", appointment.getId())
+                    .update())
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .rootCause()
+        .hasMessageContaining("appointment_fixed_duration_check");
   }
 
   @Test
@@ -142,7 +164,7 @@ class AppointmentOverlapTest {
 
   private Appointment book(Patient patient, Doctor doctor, Room room, Instant startAt) {
     return appointments.saveAndFlush(
-        new Appointment(patient, specialty, doctor, room, startAt, SLOT, clock.instant()));
+        new Appointment(patient, specialty, doctor, room, startAt, clock.instant()));
   }
 
   private Patient newPatient() {

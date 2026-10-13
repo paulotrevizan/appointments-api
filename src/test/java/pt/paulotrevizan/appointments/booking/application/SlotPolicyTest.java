@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
@@ -16,9 +15,7 @@ class SlotPolicyTest {
 
   private static final Instant NOW = Instant.parse("2030-01-07T10:00:00Z");
 
-  private final SlotPolicy policy =
-      new SlotPolicy(
-          new BookingProperties(Duration.ofMinutes(30)), Clock.fixed(NOW, ZoneOffset.UTC));
+  private final SlotPolicy policy = new SlotPolicy(Clock.fixed(NOW, ZoneOffset.UTC));
 
   @Test
   @DisplayName("D-007: a future slot on the grid is accepted")

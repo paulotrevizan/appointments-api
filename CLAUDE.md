@@ -114,14 +114,16 @@ common/         cross-cutting, split by concern: web/ (ProblemDetail handler, Ap
   required. Use fetch joins (`JOIN FETCH`) when a response needs related data — no N+1.
 - Queries are always parameterized: Spring Data methods, `@Query` with named parameters, or
   `NamedParameterJdbcTemplate`. **Never build SQL by string concatenation.**
-- Native SQL only for PostgreSQL-specific needs (outbox claim with `FOR UPDATE SKIP LOCKED`,
-  range operators). The generated `slot` column is not mapped in the entity.
+- Native SQL only for PostgreSQL-specific needs (outbox claim with `FOR UPDATE SKIP LOCKED`).
 - Constraint names are explicit in migrations (`appointment_doctor_no_overlap`,
   `appointment_room_no_overlap`, `appointment_patient_no_overlap`) and mapped to domain outcomes
   by name.
-- Retry loops (allocation retries, D-003) run **outside** the transaction: one transaction per
-  attempt via `TransactionTemplate`; use `saveAndFlush` so constraint violations surface inside
-  the attempt. Never rely on calling a `@Transactional` method through `this`.
+- Retries use Spring Framework's `@Retryable` / `RetryTemplate`, never hand-written loops. They run
+  **outside** the transaction: one transaction per attempt via `TransactionTemplate`; use
+  `saveAndFlush` so constraint violations surface inside the attempt (D-003). Never rely on
+  calling a `@Transactional` method through `this`.
+- No pessimistic, advisory or `SERIALIZABLE` locking for bookings: the slot invariants are unique
+  indexes and conflicts are retried (D-002, D-003).
 
 ## Testing rules (D-022)
 
