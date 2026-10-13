@@ -1,3 +1,8 @@
 spring:
   main:
     banner-mode: off
+
+appointments:
+  security:
+    booking-client-password: booking-test
+    admin-password: admin-test

@@ -5,6 +5,11 @@ spring:
     password: appointments
 
 appointments:
+  security:
+    booking-client-password: booking-local
+    admin-password: admin-local
+    # Swagger UI and the OpenAPI document open without login; sign in with the Authorize button.
+    public-api-docs: true
   seed:
     min-doctors-per-specialty: 3
     max-doctors-per-specialty: 5

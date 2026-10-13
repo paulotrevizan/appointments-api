@@ -28,9 +28,10 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-020 | Spring Data JPA, native SQL only where PostgreSQL features are needed | Accepted | 2026-10-12 |
 | D-021 | Layered architecture, packaged by feature; interfaces only at external boundaries | Accepted | 2026-10-12 |
 | D-022 | Behaviour-based tests against real infrastructure | Accepted | 2026-10-12 |
-| D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI | Accepted | 2026-10-12 |
+| D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit | Accepted | 2026-10-12 |
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
+| D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
 
 ---
 
@@ -219,10 +220,10 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
   - A concurrency test proves I1, I2 and I5 under parallel requests.
 - **Trade-offs:** ➕ tests survive refactoring and prove the invariants, not the implementation. ➖ slower suite (containers); Docker is required to run it.
 
-## D-023 — Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI
+## D-023 — Tooling: Spotless, GitHub Actions, WireMock, Mailpit
 
-- **Decision:** Spotless with google-java-format (build fails on unformatted code); GitHub Actions runs `./mvnw verify` on every push; Docker Compose runs the app with PostgreSQL, WireMock (calendar and room systems) and Mailpit (fake SMTP with a web UI). The API is documented in the README plus an `api.http` file instead of springdoc.
-- **Trade-offs:** ➕ consistent style without discussion, every commit verified, the full flow observable locally (including the email). ➖ no interactive API UI; one fewer dependency to keep compatible with Spring Boot 4.
+- **Decision:** Spotless with google-java-format (build fails on unformatted code); GitHub Actions runs `./mvnw verify` on every push; Docker Compose runs the app with PostgreSQL, WireMock (calendar and room systems) and Mailpit (fake SMTP with a web UI). The API is documented in the README.
+- **Trade-offs:** ➕ consistent style without discussion, every commit verified, the full flow observable locally (including the email). ➖ the build fails until formatting is fixed (`spotless:apply`); more containers to run locally.
 
 ## D-024 — Randomized local sample data generated at startup, never in production or tests
 
@@ -233,7 +234,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
   - C) B, but wiping and regenerating on every start.
 - **Decision:** B.
   - Specialties are a fixed list (their codes are part of the API contract); doctors (per specialty), rooms and patients are randomized; counts are configurable.
-  - Three demo patients with fixed ids are always created, so the README and `api.http` have stable ids to use.
+  - Three demo patients with fixed ids are always created, so the README and Swagger examples have stable ids to use.
   - Appointments are not seeded: they are created through the API so the full post-booking flow runs.
   - Docker Compose keeps no database volume, so `docker compose down` + `up` gives a fresh random dataset.
 - **Trade-offs:** ➕ realistic, varied data with zero manual setup; Flyway migrations contain only schema, so production never receives sample data; restarting never duplicates data. ➖ one extra dependency (Datafaker, local profile only); data differs between runs — anything that needs stable ids uses the demo patients.
@@ -249,3 +250,13 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 - **Trade-offs:** ➕ stable ids for demo data and tests, id known before the insert, no extra `SELECT` per save. ➖ one base class; random UUIDs (v4) are 16 bytes and insert at random positions of the primary key index, which hurts locality on very large tables — irrelevant at ~1 req/s.
 - **Why not B:** it removes `BaseEntity` but moves the demo patients out of the entity model into hand-written SQL.
 - **Revisit when:** insert rate or table size makes index locality matter — switch to time-ordered UUID v7; the column type does not change.
+
+## D-026 — OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere
+
+- **Context:** Trying the endpoints by hand is easier with an interactive UI, and the contract (request, responses, error codes) is then generated from the code instead of only written in prose.
+- **Options:**
+  - A) README only, no UI.
+  - B) Add `springdoc-openapi` (Swagger UI + `/v3/api-docs`) and keep the README examples.
+- **Decision:** B. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. The document is generated from the code; the only hand-written parts are the Basic scheme and a request example, in `OpenApiConfig`.
+- **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, no annotations in controllers or DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; error codes are not in the generated document (they are in the README).
+- **Revisit when:** the API needs richer documentation (error responses, descriptions) — add annotations or a separate OpenAPI file.

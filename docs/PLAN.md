@@ -239,7 +239,7 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
   configuration with profile `local`), demo patient ids and credentials,
   configuration reference, runbook (inspect and re-drive `FAILED` tasks), project structure,
   how to extend, how AI was used.
-- `api.http` with example requests for every endpoint and error case.
+- README request examples for every endpoint and error case.
 - Conformance table in the README: each invariant (I1–I5) and key decision → the tests that
   prove it. Fix any gap found.
 
