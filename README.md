@@ -99,10 +99,6 @@ click **Authorize**, enter `booking-client` / `booking-local`, then open *POST /
 *Try it out* → *Execute*. The OpenAPI document is at `http://localhost:8080/v3/api-docs` (D-026).
 In other profiles both require HTTP Basic credentials, and the browser asks for them.
 
-### IntelliJ HTTP Client
-
-[`api.http`](api.http): choose the **local** environment and run the requests.
-
 ### curl
 
 `startAt` must be in the future, in UTC, on the :00 / :30 grid. Replace the date if it has passed.
@@ -115,7 +111,7 @@ curl -i -u booking-client:booking-local \
 ```
 
 On Windows PowerShell use `curl.exe` (plain `curl` is an alias of another command) and escape the
-quotes, or use `api.http` / Swagger UI instead.
+quotes, or use Swagger UI instead.
 
 `201 Created`:
 

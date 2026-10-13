@@ -234,7 +234,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
   - C) B, but wiping and regenerating on every start.
 - **Decision:** B.
   - Specialties are a fixed list (their codes are part of the API contract); doctors (per specialty), rooms and patients are randomized; counts are configurable.
-  - Three demo patients with fixed ids are always created, so the README and `api.http` have stable ids to use.
+  - Three demo patients with fixed ids are always created, so the README and Swagger examples have stable ids to use.
   - Appointments are not seeded: they are created through the API so the full post-booking flow runs.
   - Docker Compose keeps no database volume, so `docker compose down` + `up` gives a fresh random dataset.
 - **Trade-offs:** ➕ realistic, varied data with zero manual setup; Flyway migrations contain only schema, so production never receives sample data; restarting never duplicates data. ➖ one extra dependency (Datafaker, local profile only); data differs between runs — anything that needs stable ids uses the demo patients.
@@ -255,8 +255,8 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 - **Context:** D-023 chose README + `api.http` and no OpenAPI UI. Trying the endpoints by hand is easier with an interactive UI, and the contract (request, responses, error codes) is then generated from the code instead of only written in prose.
 - **Options:**
-  - A) Keep D-023: README + `api.http` only.
-  - B) Add `springdoc-openapi` (Swagger UI + `/v3/api-docs`), keep README and `api.http`.
+  - A) Keep D-023: README + `api.http` only (no UI).
+  - B) Add `springdoc-openapi` (Swagger UI + `/v3/api-docs`) and keep the README examples; `api.http` is dropped because Swagger UI covers manual testing.
 - **Decision:** B, supersedes the "no OpenAPI UI" part of D-023. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. Request fields and responses are described with `io.swagger.v3` annotations on the DTOs and controllers.
 - **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, examples stay close to the DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; annotations add noise to controllers and DTOs.
 - **Revisit when:** the API grows enough that annotations hide the logic — then move descriptions to a separate OpenAPI file.
