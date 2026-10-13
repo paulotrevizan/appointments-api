@@ -28,7 +28,7 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 | D-020 | Spring Data JPA, native SQL only where PostgreSQL features are needed | Accepted | 2026-10-12 |
 | D-021 | Layered architecture, packaged by feature; interfaces only at external boundaries | Accepted | 2026-10-12 |
 | D-022 | Behaviour-based tests against real infrastructure | Accepted | 2026-10-12 |
-| D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI | Accepted (OpenAPI UI part superseded by D-026) | 2026-10-12 |
+| D-023 | Tooling: Spotless, GitHub Actions, WireMock, Mailpit | Accepted | 2026-10-12 |
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
 | D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
@@ -220,10 +220,10 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
   - A concurrency test proves I1, I2 and I5 under parallel requests.
 - **Trade-offs:** ➕ tests survive refactoring and prove the invariants, not the implementation. ➖ slower suite (containers); Docker is required to run it.
 
-## D-023 — Tooling: Spotless, GitHub Actions, WireMock, Mailpit; no OpenAPI UI
+## D-023 — Tooling: Spotless, GitHub Actions, WireMock, Mailpit
 
 - **Decision:** Spotless with google-java-format (build fails on unformatted code); GitHub Actions runs `./mvnw verify` on every push; Docker Compose runs the app with PostgreSQL, WireMock (calendar and room systems) and Mailpit (fake SMTP with a web UI). The API is documented in the README.
-- **Trade-offs:** ➕ consistent style without discussion, every commit verified, the full flow observable locally (including the email). ➖ no interactive API UI; one fewer dependency to keep compatible with Spring Boot 4.
+- **Trade-offs:** ➕ consistent style without discussion, every commit verified, the full flow observable locally (including the email). ➖ the build fails until formatting is fixed (`spotless:apply`); more containers to run locally.
 
 ## D-024 — Randomized local sample data generated at startup, never in production or tests
 
@@ -253,10 +253,10 @@ Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](d
 
 ## D-026 — OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere
 
-- **Context:** D-023 chose README only and no OpenAPI UI. Trying the endpoints by hand is easier with an interactive UI, and the contract (request, responses, error codes) is then generated from the code instead of only written in prose.
+- **Context:** Trying the endpoints by hand is easier with an interactive UI, and the contract (request, responses, error codes) is then generated from the code instead of only written in prose.
 - **Options:**
-  - A) Keep D-023: README only (no UI).
+  - A) README only, no UI.
   - B) Add `springdoc-openapi` (Swagger UI + `/v3/api-docs`) and keep the README examples.
-- **Decision:** B, supersedes the "no OpenAPI UI" part of D-023. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. Request fields and responses are described with `io.swagger.v3` annotations on the DTOs and controllers.
-- **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, examples stay close to the DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; annotations add noise to controllers and DTOs.
-- **Revisit when:** the API grows enough that annotations hide the logic — then move descriptions to a separate OpenAPI file.
+- **Decision:** B. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. The document is generated from the code; the only hand-written parts are the Basic scheme and a request example, in `OpenApiConfig`.
+- **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, no annotations in controllers or DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; error codes are not in the generated document (they are in the README).
+- **Revisit when:** the API needs richer documentation (error responses, descriptions) — add annotations or a separate OpenAPI file.
