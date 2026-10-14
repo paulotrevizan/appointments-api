@@ -85,3 +85,5 @@ appointments:
     backoff-jitter: 0.2
   email:
     from: ${EMAIL_FROM}
+    # Patients read times in local time (D-027); e.g. Atlantic/Azores for a clinic in the Azores.
+    time-zone: Europe/Lisbon

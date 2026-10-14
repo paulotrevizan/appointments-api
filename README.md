@@ -508,6 +508,7 @@ Behaviour settings (any of them can be overridden with an environment variable, 
 | `appointments.outbox.backoff-multiplier` / `backoff-jitter` | `2` / `0.2` | Exponential growth / ±20 % randomness |
 | `spring.http.clients.connect-timeout` / `read-timeout` | `2s` / `5s` | Calendar and room calls |
 | `spring.mail.properties[mail.smtp.*timeout]` | `2000` / `5000` / `5000` ms | SMTP connect / read / write |
+| `appointments.email.time-zone` | `Europe/Lisbon` | Time zone of the date and time in the confirmation email, e.g. `Atlantic/Azores` (D-027); the API and the database stay in UTC |
 | `appointments.security.public-api-docs` | `false` (`true` in `local`) | Swagger UI and `/v3/api-docs` without login |
 | `appointments.seed.*` (`local` only) | 3–5 doctors per specialty, 10 rooms, 200 patients | Sample data size |
 
@@ -628,6 +629,7 @@ names are their `@DisplayName`).
 | D-024 local sample data | `LocalDataSeederTest` (counts, fixed demo ids, no duplicates on restart); `LocalDataSeederInactiveTest` "D-024: the seeder is not active outside the local profile" |
 | D-025 application-assigned ids | `BaseEntityTest` "D-025: saving a new entity with an application-assigned id is one INSERT, no SELECT" |
 | D-026 OpenAPI and Swagger UI | `OpenApiDocumentationTest`, `OpenApiPublicDocumentationTest` |
+| D-027 patient-facing times in Lisbon time | `ConfirmationEmailTest` "D-027: the email shows Lisbon time: summer time is UTC+1, even across midnight" (and the winter case in the I4 email test) |
 | HLD §12 database down | `DatabaseUnavailableTest` (booking and listing answer 503 problem detail within seconds, readiness fails); `UnexpectedErrorTest` (500 problem detail without internal details) |
 | HLD §13 operability | `ObservabilityTest` (metric names and values, probes), `RequestIdTest` (request id echoed and in logs) |
 

@@ -18,6 +18,7 @@ import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -118,12 +119,26 @@ class ConfirmationEmailTest {
     assertThat(GreenMailUtil.getBody(email))
         .contains("Hello Ana Souza,")
         .contains("Date: Monday, 5 March 2035")
-        .contains("Time: 14:00 - 14:30 (UTC)")
+        .contains("Time: 14:00 - 14:30 (Lisbon time)")
         .contains("Doctor: " + booking.doctorName())
         .contains("Room: " + booking.roomName())
         .contains("Reference: " + booking.id())
         .doesNotContain(booking.specialtyCode())
         .doesNotContainIgnoringCase("specialty");
+  }
+
+  @Test
+  @DisplayName("D-027: the email shows Lisbon time: summer time is UTC+1, even across midnight")
+  void givenSummerSlotLateInTheUtcDay_whenEmailSent_thenLisbonDateAndTime() {
+    // 23:30 UTC in July is 00:30 the next day in Lisbon (WEST, UTC+1).
+    Booking booking = book(Instant.parse("2035-07-10T23:30:00Z"));
+
+    await()
+        .atMost(TIMEOUT)
+        .untilAsserted(() -> assertThat(emailTask(booking).status()).isEqualTo("DONE"));
+    assertThat(GreenMailUtil.getBody(smtp.getReceivedMessages()[0]))
+        .contains("Date: Wednesday, 11 July 2035")
+        .contains("Time: 00:30 - 01:00 (Lisbon time)");
   }
 
   @Test
@@ -172,6 +187,10 @@ class ConfirmationEmailTest {
   record TaskRow(String status, int attempts, String lastError, boolean retryScheduled) {}
 
   private Booking book() {
+    return book(Instant.parse("2035-03-05T14:00:00Z"));
+  }
+
+  private Booking book(Instant startAt) {
     Specialty specialty = fixtures.specialty();
     fixtures.doctors(specialty, 1);
     fixtures.rooms(1);
@@ -183,9 +202,9 @@ class ConfirmationEmailTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content(
                 """
-                {"patientId": "%s", "specialty": "%s", "startAt": "2035-03-05T14:00:00Z"}
+                {"patientId": "%s", "specialty": "%s", "startAt": "%s"}
                 """
-                    .formatted(patient.getId(), specialty.getCode()))
+                    .formatted(patient.getId(), specialty.getCode(), startAt))
             .exchange();
     assertThat(result).hasStatus(HttpStatus.CREATED);
     DocumentContext body =
