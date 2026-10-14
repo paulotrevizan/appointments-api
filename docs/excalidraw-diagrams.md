@@ -1,5 +1,11 @@
 # Diagrams for Excalidraw
 
+> **Historical snapshot.** These blocks produced the original design sketch
+> ([original-design-sketch.png](original-design-sketch.png)) and describe the design as it was
+> before implementation — for example a `200` on retries and exclusion constraints on a `slot`
+> column. The current design is [HLD.md](HLD.md); what changed is listed in the README, section
+> *Design history*.
+
 Paste each block into Excalidraw → **More tools → Mermaid to Excalidraw**.
 Flowcharts become editable shapes; sequence and class diagrams are converted as far as
 Excalidraw supports them — adjust styling by hand afterwards.

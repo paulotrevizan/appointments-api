@@ -12,7 +12,8 @@ Implementation plan: [docs/PLAN.md](docs/PLAN.md) · Rules for contributors (and
 [Run the tests](#run-the-tests) · [Run locally](#run-locally) · [Calling the API](#calling-the-api) ·
 [Configuration](#configuration) · [Operating the service](#operating-the-service) ·
 [Runbook](#runbook-failed-post-booking-tasks) · [Conformance](#conformance-invariants-and-decisions--tests) ·
-[Project structure](#project-structure) · [How to extend](#how-to-extend) · [How AI was used](#how-ai-was-used)
+[Project structure](#project-structure) · [How to extend](#how-to-extend) ·
+[Design history](#design-history-the-original-sketch) · [How AI was used](#how-ai-was-used)
 
 ## Quick start
 
@@ -610,7 +611,7 @@ src/main/resources/
   application*.yaml, db/migration/ (Flyway, schema only)
 src/test/java/…   same packages; integration tests run against Testcontainers PostgreSQL 18
 docker/wiremock/  WireMock mappings for the local calendar and room systems
-docs/             HLD.md, PLAN.md, diagrams
+docs/             HLD.md (current design), PLAN.md, the original design sketch (history only)
 ```
 
 Each feature uses the same layers — `api` → `application` → `domain` / `persistence` — and
@@ -637,6 +638,34 @@ Start from the design: add or change the decision in [DECISIONS.md](DECISIONS.md
   not change (D-012).
 - **Variable durations**: revisit D-002 — overlap is then no longer "same start", so the unique
   indexes must go back to exclusion constraints.
+
+## Design history: the original sketch
+
+The solution started as a sketch in Excalidraw: the problem statement, invariants, open questions,
+the three flows, API payloads and a first data model on one board
+([docs/original-design-sketch.png](docs/original-design-sketch.png)).
+
+> **Historical, not current.** The sketch is kept as drawn to show where the design came from. The
+> current design is [docs/HLD.md](docs/HLD.md), and every change since is recorded in
+> [DECISIONS.md](DECISIONS.md). Do not build against the sketch.
+
+![Original design sketch in Excalidraw (historical)](docs/original-design-sketch.png)
+
+Most of the core ideas survived: our database as the source of truth, a transactional outbox with
+three independent tasks claimed with `FOR UPDATE SKIP LOCKED` and a lease, cursor pagination for the
+admin listing, and the shape of both payloads. What changed during development, and why:
+
+| In the sketch | Implemented | Why |
+|---------------|-------------|-----|
+| A repeated request returns `200` | `201` with the same body as the original response | Same response however many times it is sent; clients need no special case (D-011) |
+| Overlaps blocked by `EXCLUDE USING gist` on a `slot tstzrange` column | Partial unique indexes on (doctor / room / patient, `start_at`) plus `CHECK` constraints that fix the 30-minute duration and the grid; `slot` dropped (migration `V2`) | Under 20 parallel requests the exclusion constraints deadlocked; unique indexes fail cleanly (D-002, measured) |
+| On a conflict, drop that candidate and try the next one | Each attempt is a new transaction with fresh candidates, retried up to 3 times by Spring's `@Retryable` | Simpler and correct under contention; an identical request finds the winner's appointment (D-003) |
+| `FAILED` "after N attempts (TBD)", every failure retried | 10 attempts, backoff 5 s × 2 capped at 10 min with ±20 % jitter; HTTP 4xx and SMTP 5xx fail at once | Retrying a rejection only delays the alert (D-005, D-017) |
+| Errors described by HTTP status | A stable `code` per error in RFC 9457 problem details | Clients branch on `code`, not on text (HLD §7) |
+| Index on `start_at` | Index on (`start_at`, `id`) | `id` breaks ties so pages never skip or repeat rows (D-016) |
+| An external "E-mail Service API" | SMTP behind the `EmailSender` port; Mailpit and GreenMail stand in for it | The statement allows a fake SMTP service (HLD §7.3) |
+| The patient calls the service | Platform components call it with per-endpoint roles; patients authenticate upstream | No end-user identity in this service (HLD A6, D-012) |
+| — | Health probes, metrics, request ids, JSON logs | Operability (HLD §13) |
 
 ## How AI was used
 

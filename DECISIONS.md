@@ -2,7 +2,8 @@
 
 Every significant decision, the options considered and the trade-offs accepted.
 Decided by Paulo Trevizan; AI was used to explore options and challenge trade-offs.
-Context: [docs/HLD.md](docs/HLD.md) · Diagrams: [docs/excalidraw-diagrams.md](docs/excalidraw-diagrams.md).
+Context: [docs/HLD.md](docs/HLD.md) · Original design sketch (history, superseded where these
+decisions say so): [docs/original-design-sketch.png](docs/original-design-sketch.png).
 
 | ID | Decision | Status | Date |
 |----|----------|--------|------|
