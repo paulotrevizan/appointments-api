@@ -153,14 +153,21 @@ appointment id as idempotency key to external systems (A7).
 
 1. Validate `limit` (default 20, max 100). If a `cursor` is present, decode it into
    (`startAt`, `id`); malformed → **400** `INVALID_CURSOR`.
-2. One query, served by the index on (`start_at`, `id`):
+2. One query, served by the index on (`start_at`, `id`), with patient, specialty, doctor and room
+   fetched in the same statement. The first page and the following pages are two variants of it
+   (`findFirstPage` / `findPageAfter` in `AppointmentRepository`):
    ```sql
+   -- first page (no cursor)
    SELECT ... FROM appointment a
-     JOIN patient p ... JOIN doctor d ... JOIN room r ... JOIN specialty s ...
-   WHERE (:cursorStartAt IS NULL OR (a.start_at, a.id) > (:cursorStartAt, :cursorId))
+     JOIN patient p ... JOIN specialty s ... JOIN doctor d ... JOIN room r ...
    ORDER BY a.start_at, a.id
-   LIMIT :limit + 1
+   FETCH FIRST :limit + 1 ROWS ONLY
+
+   -- next pages: same query plus a row comparison with the cursor
+   WHERE (a.start_at, a.id) > (:cursorStartAt, :cursorId)
    ```
+   Two variants instead of one `WHERE (:cursorStartAt IS NULL OR …)`: PostgreSQL cannot infer the
+   type of a null parameter, and the `OR` would keep the planner from seeking the index.
 3. Load the post-booking statuses for the returned ids in **one** extra query
    (`outbox_task WHERE appointment_id IN (...)`) — no N+1.
 4. Got `limit + 1` rows → drop the extra one and build `nextCursor` from the last returned
