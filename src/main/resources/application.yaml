@@ -41,12 +41,27 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health, metrics
+  endpoint:
+    health:
+      # /actuator/health/liveness and /readiness. Liveness never checks dependencies: a database
+      # outage must stop traffic (readiness), not restart the instance.
+      probes:
+        enabled: true
+      show-components: when-authorized
+      group:
+        readiness:
+          include: readinessState, db
   # D-001: the service stays healthy while an external system (here SMTP) is down; the outbox
   # absorbs the outage.
   health:
     mail:
       enabled: false
+
+logging:
+  pattern:
+    # Plain-text logs (IDE, tests). The container logs JSON, where the MDC is a field (Dockerfile).
+    correlation: "[%X{requestId:-}] "
 
 appointments:
   booking:

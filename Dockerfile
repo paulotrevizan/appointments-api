@@ -18,5 +18,7 @@ COPY --from=build /workspace/extracted/spring-boot-loader/ ./
 COPY --from=build /workspace/extracted/snapshot-dependencies/ ./
 COPY --from=build /workspace/extracted/application/ ./
 USER app
+# Structured JSON logs (Elastic Common Schema); the MDC request id becomes a field.
+ENV LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs
 EXPOSE 8080
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "org.springframework.boot.loader.launch.JarLauncher"]

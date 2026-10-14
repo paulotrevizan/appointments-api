@@ -1,5 +1,6 @@
 package pt.paulotrevizan.appointments.booking.application;
 
+import io.micrometer.core.instrument.Timer;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +27,25 @@ public class BookingService {
   private final PatientRepository patients;
   private final SpecialtyRepository specialties;
   private final AppointmentBooker booker;
+  private final BookingMetrics metrics;
 
   public Appointment book(UUID patientId, String specialtyCode, Instant startAt) {
+    Timer.Sample sample = metrics.start();
+    try {
+      BookingResult result = bookOrFindRepeated(patientId, specialtyCode, startAt);
+      metrics.recordBooking(
+          sample, result.repeated() ? BookingMetrics.REPEATED : BookingMetrics.BOOKED);
+      return result.appointment();
+    } catch (ApiException e) {
+      metrics.recordBooking(sample, e.getCode());
+      throw e;
+    } catch (RuntimeException e) {
+      metrics.recordBooking(sample, BookingMetrics.ERROR);
+      throw e;
+    }
+  }
+
+  private BookingResult bookOrFindRepeated(UUID patientId, String specialtyCode, Instant startAt) {
     slotPolicy.validate(startAt);
     Patient patient =
         patients.findById(patientId).orElseThrow(() -> new PatientNotFoundException(patientId));

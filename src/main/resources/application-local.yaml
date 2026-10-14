@@ -1,19 +1,21 @@
+# Defaults for running from the IDE against `docker compose up -d postgres wiremock mailpit`;
+# docker-compose.yml sets the same variables to the container host names.
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/appointments
-    username: appointments
-    password: appointments
-  # WireMock simulates both systems (docker-compose.yml).
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/appointments}
+    username: ${DB_USERNAME:appointments}
+    password: ${DB_PASSWORD:appointments}
+  # WireMock simulates both systems.
   http:
     serviceclient:
       calendar:
-        base-url: http://localhost:8089
+        base-url: ${CALENDAR_BASE_URL:http://localhost:8089}
       rooms:
-        base-url: http://localhost:8089
-  # Mailpit catches every email (docker-compose.yml).
+        base-url: ${ROOMS_BASE_URL:http://localhost:8089}
+  # Mailpit catches every email.
   mail:
-    host: localhost
-    port: 1025
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
 
 appointments:
   security:

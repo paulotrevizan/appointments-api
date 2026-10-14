@@ -1,0 +1,12 @@
+{
+  "request": {
+    "method": "POST",
+    "urlPathPattern": "/rooms/[0-9a-f-]+/reservations",
+    "headers": { "Idempotency-Key": { "matches": "[0-9a-f-]+" } }
+  },
+  "response": {
+    "status": 201,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": { "status": "RESERVED" }
+  }
+}
