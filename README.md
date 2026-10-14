@@ -53,7 +53,7 @@ flowchart LR
 
   client -->|"POST /api/v1/appointments"| api
   admin -->|"GET /api/v1/admin/appointments"| api
-  api -->|"appointments + outbox tasks<br/>(one transaction)"| db
+  api <-->|"book: appointment + outbox tasks<br/>list: page + task statuses<br/>worker: claim and update tasks"| db
   api -.->|"HTTP, Idempotency-Key"| calendar
   api -.->|"HTTP, Idempotency-Key"| rooms
   api -.->|"SMTP"| smtp
