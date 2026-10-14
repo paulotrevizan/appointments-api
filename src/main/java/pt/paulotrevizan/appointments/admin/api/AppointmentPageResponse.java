@@ -5,15 +5,14 @@ import java.util.Map;
 import pt.paulotrevizan.appointments.admin.application.AppointmentPage;
 
 /** {@code nextCursor} is null on the last page (HLD 7.2). */
-public record AdminAppointmentPageResponse(
-    List<AdminAppointmentResponse> items, String nextCursor) {
+public record AppointmentPageResponse(List<AppointmentListItem> items, String nextCursor) {
 
-  static AdminAppointmentPageResponse from(AppointmentPage page) {
-    return new AdminAppointmentPageResponse(
+  static AppointmentPageResponse from(AppointmentPage page) {
+    return new AppointmentPageResponse(
         page.appointments().stream()
             .map(
                 appointment ->
-                    AdminAppointmentResponse.from(
+                    AppointmentListItem.from(
                         appointment,
                         page.postBookingStatuses().getOrDefault(appointment.getId(), Map.of())))
             .toList(),

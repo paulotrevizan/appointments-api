@@ -52,7 +52,7 @@ import pt.paulotrevizan.appointments.postbooking.persistence.OutboxTaskRepositor
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Import(TestcontainersConfiguration.class)
-class AdminAppointmentListingTest {
+class AppointmentListingTest {
 
   private static final String URI = "/api/v1/admin/appointments";
   private static final Instant NINE = Instant.parse("2035-03-05T09:00:00Z");
@@ -68,7 +68,7 @@ class AdminAppointmentListingTest {
   private final Statistics statistics;
   private Specialty specialty;
 
-  AdminAppointmentListingTest(
+  AppointmentListingTest(
       @Autowired MockMvcTester mvc,
       @Autowired JdbcClient jdbc,
       @Autowired Clock clock,

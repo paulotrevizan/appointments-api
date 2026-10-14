@@ -8,20 +8,20 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import pt.paulotrevizan.appointments.admin.application.AdminAppointmentService;
+import pt.paulotrevizan.appointments.admin.application.AppointmentListingService;
 
 @RestController
 @RequestMapping("/api/v1/admin/appointments")
 @RequiredArgsConstructor
-class AdminAppointmentController {
+class AppointmentListingController {
 
-  private final AdminAppointmentService adminAppointmentService;
+  private final AppointmentListingService appointmentListingService;
 
   @GetMapping
-  ResponseEntity<AdminAppointmentPageResponse> list(
+  ResponseEntity<AppointmentPageResponse> list(
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
       @RequestParam(required = false) String cursor) {
     return ResponseEntity.ok(
-        AdminAppointmentPageResponse.from(adminAppointmentService.list(limit, cursor)));
+        AppointmentPageResponse.from(appointmentListingService.list(limit, cursor)));
   }
 }

@@ -61,7 +61,7 @@ booking/
   application/  BookingService, AllocationPolicy, SlotPolicy
   domain/       Appointment, AppointmentStatus, domain exceptions
   persistence/  AppointmentRepository (including the availability queries)
-admin/          same layers: AdminAppointmentController + DTOs, AdminAppointmentService, CursorCodec
+admin/          same layers: AppointmentListingController + DTOs, AppointmentListingService, CursorCodec
 postbooking/
   application/  PostBookingTasks, OutboxWorker, task handlers, RetryPolicy
   domain/       OutboxTask, OutboxTaskStatus, OutboxTaskType

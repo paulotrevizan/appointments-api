@@ -20,7 +20,7 @@ import pt.paulotrevizan.appointments.postbooking.persistence.OutboxTaskRepositor
 /** HLD 6.3: keyset pagination in two queries per page, whatever the page size. */
 @Service
 @RequiredArgsConstructor
-public class AdminAppointmentService {
+public class AppointmentListingService {
 
   private final AppointmentRepository appointments;
   private final OutboxTaskRepository outboxTasks;
