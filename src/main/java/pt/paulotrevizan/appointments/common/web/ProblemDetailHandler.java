@@ -1,7 +1,9 @@
 package pt.paulotrevizan.appointments.common.web;
 
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.TypeMismatchException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -10,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -17,6 +20,7 @@ import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+@Slf4j
 @RestControllerAdvice
 class ProblemDetailHandler extends ResponseEntityExceptionHandler {
 
@@ -36,6 +40,23 @@ class ProblemDetailHandler extends ResponseEntityExceptionHandler {
   @ExceptionHandler(AccessDeniedException.class)
   ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex) {
     return respond(HttpStatus.FORBIDDEN, null, "Access is denied");
+  }
+
+  // HLD 12: without PostgreSQL nothing can be booked or listed; the caller may retry later.
+  @ExceptionHandler({
+    CannotCreateTransactionException.class,
+    DataAccessResourceFailureException.class
+  })
+  ResponseEntity<ProblemDetail> handleDatabaseUnavailable(Exception ex) {
+    log.warn("Database unavailable: {}", ex.getClass().getSimpleName());
+    return respond(HttpStatus.SERVICE_UNAVAILABLE, null, "The service is temporarily unavailable");
+  }
+
+  // Anything not mapped above is a bug: logged in full, answered without internal details.
+  @ExceptionHandler(Exception.class)
+  ResponseEntity<ProblemDetail> handleUnexpected(Exception ex) {
+    log.error("Unexpected error", ex);
+    return respond(HttpStatus.INTERNAL_SERVER_ERROR, null, "An unexpected error occurred");
   }
 
   @Override
