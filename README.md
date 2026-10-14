@@ -255,6 +255,8 @@ book() { curl -s -u booking-client:booking-local -H 'Content-Type: application/j
 | 409 | `PATIENT_ALREADY_BOOKED` | The patient has another appointment at that slot | same patient and slot, another specialty |
 | 409 | `NO_DOCTOR_AVAILABLE` | Every doctor of the specialty is booked at that slot | see below |
 | 409 | `NO_ROOM_AVAILABLE` | Every room is booked at that slot | see below |
+| 500 | — | An unexpected error; `detail` reveals nothing internal | — |
+| 503 | — | PostgreSQL is unavailable; nothing was booked, retry later | stop the `postgres` container |
 
 ```bash
 book '{}'
@@ -353,6 +355,17 @@ for p in $patients; do book "{\"patientId\":\"$p\",\"specialty\":\"${specialties
 {"title":"Conflict","status":409,"code":"NO_ROOM_AVAILABLE","detail":"No room is free at 2030-01-08T10:00:00Z","instance":"/api/v1/appointments"}
 ```
 
+With the database down (`docker compose stop postgres`; `docker compose start postgres` to recover),
+every request that needs it answers within a few seconds, and nothing is half-written (HLD §12):
+
+```bash
+book '{"patientId":"00000000-0000-0000-0000-000000000002","specialty":"CARDIOLOGY","startAt":"2030-02-04T10:00:00Z"}'
+```
+
+```json
+{"title":"Service Unavailable","status":503,"detail":"The service is temporarily unavailable","instance":"/api/v1/appointments"}
+```
+
 ### List appointments: `GET /api/v1/admin/appointments`
 
 All appointments, sorted by `startAt` and then `id`, one page at a time (D-016). Query parameters:
@@ -412,6 +425,8 @@ curl -s -u admin:admin-local 'http://localhost:8080/api/v1/admin/appointments?li
 | 400 | `VALIDATION_ERROR` | `limit` is not a number between 1 and 100 |
 | 401 | — | No or wrong credentials |
 | 403 | — | Credentials without the `ADMIN` role |
+| 500 | — | An unexpected error; `detail` reveals nothing internal |
+| 503 | — | PostgreSQL is unavailable; retry later |
 
 ```bash
 curl -s -u admin:admin-local 'http://localhost:8080/api/v1/admin/appointments?cursor=abc'
@@ -595,6 +610,7 @@ names are their `@DisplayName`).
 | D-024 local sample data | `LocalDataSeederTest` (counts, fixed demo ids, no duplicates on restart); `LocalDataSeederInactiveTest` "D-024: the seeder is not active outside the local profile" |
 | D-025 application-assigned ids | `BaseEntityTest` "D-025: saving a new entity with an application-assigned id is one INSERT, no SELECT" |
 | D-026 OpenAPI and Swagger UI | `OpenApiDocumentationTest`, `OpenApiPublicDocumentationTest` |
+| HLD §12 database down | `DatabaseUnavailableTest` (booking and listing answer 503 problem detail within seconds, readiness fails); `UnexpectedErrorTest` (500 problem detail without internal details) |
 | HLD §13 operability | `ObservabilityTest` (metric names and values, probes), `RequestIdTest` (request id echoed and in logs) |
 
 The other decisions are about the shape of the project rather than behaviour, and are checked by
