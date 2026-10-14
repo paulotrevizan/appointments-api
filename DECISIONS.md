@@ -33,6 +33,7 @@ decisions say so): [docs/original-design-sketch.png](docs/original-design-sketch
 | D-024 | Randomized local sample data generated at startup, never in production or tests | Accepted | 2026-10-12 |
 | D-025 | UUIDs assigned by the application, with a `BaseEntity` (`Persistable`) | Accepted | 2026-10-13 |
 | D-026 | OpenAPI document and Swagger UI with springdoc; open in the local profile, authenticated elsewhere | Accepted | 2026-10-13 |
+| D-027 | Patients read appointment times in Portugal's local time; storage and API stay in UTC | Accepted | 2026-10-14 |
 
 ---
 
@@ -101,7 +102,7 @@ decisions say so): [docs/original-design-sketch.png](docs/original-design-sketch
 - **Context:** "Available doctor" is not defined, and no opening hours or doctor schedules are given.
 - **Options:** A) No overlapping appointment only. B) Plus global clinic opening hours (configured). C) Plus per-doctor working hours.
 - **Decision:** A — any future slot aligned to the 30-min grid is bookable, with no booking horizon and no calendar rules (weekends and holidays included).
-- **Why not B or C:** both require business data we do not have, so the service would enforce invented policy (e.g. "Mon–Fri 08:00–18:00") and reject valid bookings that the clinic's real schedule allows. Schedules, leave and holidays belong to the doctor calendar / clinic systems. Without opening hours there is no need for a clinic time zone: everything stays UTC, with no DST edge cases.
+- **Why not B or C:** both require business data we do not have, so the service would enforce invented policy (e.g. "Mon–Fri 08:00–18:00") and reject valid bookings that the clinic's real schedule allows. Schedules, leave and holidays belong to the doctor calendar / clinic systems. Without opening hours there is no need for a clinic time zone: booking rules, storage and the API stay UTC, with no DST edge cases. (Patient-facing text is the exception: D-027.)
 - **Trade-offs:** ➕ no invented rules, no time-zone handling. ➖ the API accepts a slot at 03:00 — the booking channel is expected to offer sensible slots.
 - **Revisit when:** schedules become available (e.g. from the calendar system) — it is a validation rule, not a design change.
 
@@ -266,3 +267,14 @@ decisions say so): [docs/original-design-sketch.png](docs/original-design-sketch
 - **Decision:** B. `springdoc-openapi-starter-webmvc-ui` 3.1.1 (built against Spring Boot 4.1; outside the Boot BOM, so pinned). The document and the UI exist in every profile. They require authentication like any other endpoint (any role) because they describe a health-data API, except in the `local` profile (`appointments.security.public-api-docs: true`), where they open without login so the credentials are entered only in the *Authorize* button. The endpoints themselves always require credentials. The document is generated from the code; the only hand-written parts are the Basic scheme and a request example, in `OpenApiConfig`.
 - **Trade-offs:** ➕ interactive testing with the *Authorize* (Basic) button, contract generated from the code, no annotations in controllers or DTOs. ➖ one more dependency to keep compatible with Spring Boot upgrades; error codes are not in the generated document (they are in the README).
 - **Revisit when:** the API needs richer documentation (error responses, descriptions) — add annotations or a separate OpenAPI file.
+
+## D-027 — Patients read appointment times in Portugal's local time; storage and API stay in UTC
+
+- **Context:** The service schedules appointments in Portugal. Everything is stored and exchanged in UTC (D-008), but the confirmation email is read by a patient, not a system. Mainland Portugal is UTC+0 in winter and UTC+1 in summer, so an email showing "14:00 (UTC)" for a July appointment is an hour off the patient's clock; near midnight even the date differs.
+- **Options:**
+  - A) Keep UTC everywhere, labelled as such.
+  - B) Format patient-facing times in a configured time zone (`appointments.email.time-zone`, default `Europe/Lisbon`); keep storage, API and booking rules in UTC.
+  - C) A time zone per clinic or per room.
+- **Decision:** B. The email shows date and time in `Europe/Lisbon`, named in the text ("Lisbon time"). The API keeps ISO-8601 UTC instants: clients format for their users. The 30-minute grid is unchanged: Portuguese offsets are whole hours, so :00 / :30 in UTC are :00 / :30 locally.
+- **Trade-offs:** ➕ the patient sees the time on their own clock, including summer time and the date at midnight; one setting, no change to data or contract. ➖ one zone per deployment: a clinic in the Azores (UTC−1) needs its own setting (`Atlantic/Azores`).
+- **Why not A:** correct but unusable for the one reader who is not a system. **Why not C:** no clinic or room location data exists (A4); it becomes the answer if one deployment serves several time zones.
