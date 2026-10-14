@@ -40,21 +40,31 @@ curl -u admin:admin-local http://localhost:8080/api/v1/admin/appointments
 
 One Spring Boot service and one PostgreSQL database; no message broker (D-014).
 
+```mermaid
+flowchart LR
+  client["Booking client<br/>patient app backend, front desk"]
+  admin["Admin panel"]
+  api["Appointments API<br/>Spring Boot"]
+  db[("PostgreSQL 18")]
+  calendar["Doctor calendar system"]
+  rooms["Room reservation system"]
+  smtp["Email provider (SMTP)"]
+
+  client -->|"POST /api/v1/appointments"| api
+  admin -->|"GET /api/v1/admin/appointments"| api
+  api -->|"appointments + outbox tasks<br/>(one transaction)"| db
+  api -.->|"HTTP, Idempotency-Key"| calendar
+  api -.->|"HTTP, Idempotency-Key"| rooms
+  api -.->|"SMTP"| smtp
 ```
- Booking client ──POST /api/v1/appointments──┐       ┌──GET /api/v1/admin/appointments── Admin
-                                             ▼       ▼
-                     ┌────────────── Appointments API (Spring Boot) ──────────────┐
-                     │ booking: validate → pick doctor + room → one transaction:  │
-                     │          appointment + 3 outbox tasks                      │
-                     │ admin:   keyset-paginated listing with task statuses       │
-                     │ outbox worker (every 2 s): claim due tasks, call adapters, │
-                     │          retry with backoff, mark DONE / FAILED            │
-                     └───────┬──────────────────┬───────────────────┬─────────────┘
-                             ▼                  ▼                   ▼
-                       PostgreSQL 18     Doctor calendar /    SMTP (email)
-                  (unique slot indexes)  Room reservation
-                                         (HTTP, idempotent)
-```
+
+- **Booking** validates the request, picks a doctor and a room, and writes the appointment and its
+  three post-booking tasks in one transaction; the response does not wait for any external system.
+- **The outbox worker** (every 2 s) claims due tasks, calls the external systems (dashed lines),
+  retries with backoff and marks each task `DONE` or `FAILED`.
+- **The admin listing** reads appointments page by page, with the status of each task.
+
+The components inside the service are in [HLD §5](docs/HLD.md#5-architecture).
 
 The guarantees, and what enforces them (HLD §2):
 

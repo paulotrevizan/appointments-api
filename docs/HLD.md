@@ -53,24 +53,44 @@ exists to protect one of them.
 
 Single deployable Spring Boot service (modular monolith) + PostgreSQL. No message broker.
 
+```mermaid
+flowchart LR
+  client["Patient app backend /<br/>Front-desk system"]
+  admin["Admin panel"]
+
+  subgraph service["Appointments Service (Spring Boot)"]
+    api["REST API"]
+    booking["Booking Service"]
+    allocation["Allocation Policy<br/>choose doctor + room"]
+    listing["Appointment Listing Service"]
+    worker["Outbox Worker<br/>scheduled"]
+    calendarPort["DoctorCalendarGateway"]
+    roomsPort["RoomReservationGateway"]
+    emailPort["EmailSender"]
+  end
+
+  db[("PostgreSQL")]
+  calendar["Doctor Calendar System"]
+  rooms["Room Reservation System"]
+  smtp["SMTP / Email provider"]
+
+  client -->|"POST /appointments"| api
+  admin -->|"GET /admin/appointments"| api
+  api --> booking
+  api --> listing
+  booking --> allocation
+  booking -->|"1 transaction:<br/>appointment + 3 outbox tasks"| db
+  listing -->|"keyset page +<br/>task statuses"| db
+  worker -->|"claims due<br/>PENDING tasks"| db
+  worker --> calendarPort
+  worker --> roomsPort
+  worker --> emailPort
+  calendarPort -.->|"HTTP"| calendar
+  roomsPort -.->|"HTTP"| rooms
+  emailPort -.->|"SMTP"| smtp
 ```
-[Patient app backend / Front-desk system]     [Admin panel]
-          │ POST /appointments                  │ GET /admin/appointments
-          ▼                                     ▼
-┌────────────────── Appointments Service (Spring Boot) ──────────────────┐
-│  REST API                                                              │
-│     │                                                                  │
-│  Booking Service ──▶ Allocation Policy (choose doctor + room)          │
-│     │                                                                  │
-│     ▼ 1 transaction: appointment + 3 outbox tasks                      │
-│  ─────────────────────────────────────────────▶ [PostgreSQL]           │
-│                                                     ▲                  │
-│  Outbox Worker (scheduled) ── claims PENDING ───────┘                  │
-│     ├─▶ CalendarAdapter ──▶ [Doctor Calendar System]  (external)       │
-│     ├─▶ RoomAdapter     ──▶ [Room Reservation System] (external)       │
-│     └─▶ EmailAdapter    ──▶ [SMTP / Email provider]   (external)       │
-└────────────────────────────────────────────────────────────────────────┘
-```
+
+Dashed lines are calls to external systems; each goes through a port (D-006).
 
 ### Components
 
@@ -257,13 +277,14 @@ Next page: `GET /api/v1/admin/appointments?limit=20&cursor=eyJzdGFydEF0Ijoi...`
 
 ## 8. Data model (PostgreSQL)
 
-```
-PATIENT   1 ──── N APPOINTMENT
-SPECIALTY 1 ──── N DOCTOR
-SPECIALTY 1 ──── N APPOINTMENT
-DOCTOR    1 ──── N APPOINTMENT
-ROOM      1 ──── N APPOINTMENT
-APPOINTMENT 1 ── 3 OUTBOX_TASK
+```mermaid
+erDiagram
+  PATIENT ||--o{ APPOINTMENT : books
+  SPECIALTY ||--o{ DOCTOR : has
+  SPECIALTY ||--o{ APPOINTMENT : "requested for"
+  DOCTOR ||--o{ APPOINTMENT : attends
+  ROOM ||--o{ APPOINTMENT : hosts
+  APPOINTMENT ||--|{ OUTBOX_TASK : "has 3"
 ```
 
 | Table | Columns | Constraints / indexes |
