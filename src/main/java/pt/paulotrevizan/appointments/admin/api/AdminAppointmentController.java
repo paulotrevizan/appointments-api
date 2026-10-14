@@ -3,6 +3,7 @@ package pt.paulotrevizan.appointments.admin.api;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,9 +18,10 @@ class AdminAppointmentController {
   private final AdminAppointmentService adminAppointmentService;
 
   @GetMapping
-  AdminAppointmentPageResponse list(
+  ResponseEntity<AdminAppointmentPageResponse> list(
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
       @RequestParam(required = false) String cursor) {
-    return AdminAppointmentPageResponse.from(adminAppointmentService.list(limit, cursor));
+    return ResponseEntity.ok(
+        AdminAppointmentPageResponse.from(adminAppointmentService.list(limit, cursor)));
   }
 }
