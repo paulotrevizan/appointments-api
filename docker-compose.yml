@@ -1,4 +1,26 @@
+# Full local stack: `docker compose up --build`. No volume for PostgreSQL: `down` + `up` starts from
+# an empty database, and the app seeds a fresh random dataset (D-024).
 services:
+  app:
+    build: .
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_URL: jdbc:postgresql://postgres:5432/appointments
+      CALENDAR_BASE_URL: http://wiremock:8080
+      ROOMS_BASE_URL: http://wiremock:8080
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+    ports:
+      # APP_PORT=18080 docker compose up ... when 8080 is taken (e.g. by the app run from the IDE).
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      wiremock:
+        condition: service_started
+      mailpit:
+        condition: service_started
+
   postgres:
     image: postgres:18
     environment:
@@ -12,3 +34,19 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Doctor calendar and room reservation systems (HLD 7.3). Request journal:
+  # http://localhost:8089/__admin/requests
+  wiremock:
+    image: wiremock/wiremock:3.13.2
+    ports:
+      - "8089:8080"
+    volumes:
+      - ./docker/wiremock/mappings:/home/wiremock/mappings:ro
+
+  # Fake SMTP server; every email is visible at http://localhost:8025
+  mailpit:
+    image: axllent/mailpit:v1.31.2
+    ports:
+      - "1025:1025"
+      - "8025:8025"

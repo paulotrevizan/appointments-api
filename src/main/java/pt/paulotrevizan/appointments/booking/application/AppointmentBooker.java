@@ -6,12 +6,14 @@ import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.resilience.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import pt.paulotrevizan.appointments.booking.domain.Appointment;
 import pt.paulotrevizan.appointments.booking.domain.PatientAlreadyBookedException;
 import pt.paulotrevizan.appointments.booking.persistence.AppointmentRepository;
+import pt.paulotrevizan.appointments.booking.persistence.SlotConstraint;
 import pt.paulotrevizan.appointments.catalog.domain.Patient;
 import pt.paulotrevizan.appointments.catalog.domain.Specialty;
 import pt.paulotrevizan.appointments.postbooking.application.PostBookingTasks;
@@ -26,6 +28,7 @@ class AppointmentBooker {
   private final PostBookingTasks postBookingTasks;
   private final TransactionTemplate transactionTemplate;
   private final Clock clock;
+  private final BookingMetrics metrics;
 
   /**
    * One attempt per transaction (D-003). A request that loses the race for a doctor, room or
@@ -37,11 +40,17 @@ class AppointmentBooker {
       maxRetriesString = "${appointments.booking.max-retries}",
       delay = 10,
       jitter = 5)
-  public Appointment book(Patient patient, Specialty specialty, Instant startAt) {
-    return transactionTemplate.execute(
-        status ->
-            findRepeated(patient, specialty, startAt)
-                .orElseGet(() -> create(patient, specialty, startAt)));
+  public BookingResult book(Patient patient, Specialty specialty, Instant startAt) {
+    try {
+      return transactionTemplate.execute(
+          status ->
+              findRepeated(patient, specialty, startAt)
+                  .map(BookingResult::repeated)
+                  .orElseGet(() -> BookingResult.booked(create(patient, specialty, startAt))));
+    } catch (DataIntegrityViolationException e) {
+      SlotConstraint.violatedBy(e).ifPresent(metrics::recordConflict);
+      throw e;
+    }
   }
 
   private Optional<Appointment> findRepeated(

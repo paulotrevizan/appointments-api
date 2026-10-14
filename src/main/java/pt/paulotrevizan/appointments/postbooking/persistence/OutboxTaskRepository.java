@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 import pt.paulotrevizan.appointments.postbooking.domain.OutboxTask;
+import pt.paulotrevizan.appointments.postbooking.domain.OutboxTaskStatus;
+import pt.paulotrevizan.appointments.postbooking.domain.OutboxTaskType;
 
 /**
  * Times come from the database clock, never from the instances (HLD 6.2). The updates after a claim
@@ -18,6 +20,19 @@ import pt.paulotrevizan.appointments.postbooking.domain.OutboxTask;
 public interface OutboxTaskRepository extends JpaRepository<OutboxTask, UUID> {
 
   List<OutboxTask> findByAppointmentIdIn(Collection<UUID> appointmentIds);
+
+  long countByTypeAndStatus(OutboxTaskType type, OutboxTaskStatus status);
+
+  /** How long the oldest PENDING task has waited, in seconds; 0 when nothing is pending. */
+  @Query(
+      nativeQuery = true,
+      value =
+          """
+          SELECT COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)
+          FROM outbox_task
+          WHERE status = 'PENDING'
+          """)
+  double oldestPendingAgeSeconds();
 
   /** Leases up to {@code batchSize} due tasks, skipping rows another instance is claiming. */
   @Transactional

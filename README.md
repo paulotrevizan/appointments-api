@@ -34,10 +34,31 @@ Windows (PowerShell or cmd):
 
 ## Run locally
 
-1. Start PostgreSQL:
+### Everything in Docker
+
+```bash
+docker compose up --build
+```
+
+This starts the application (profile `local`), PostgreSQL, WireMock (the doctor calendar and room
+reservation systems) and Mailpit (a fake SMTP server):
+
+| What | Where |
+|------|-------|
+| API and Swagger UI | <http://localhost:8080>, <http://localhost:8080/swagger-ui.html> |
+| Emails sent to patients | Mailpit UI: <http://localhost:8025> |
+| Calls to the calendar and room systems | WireMock request journal: <http://localhost:8089/__admin/requests> |
+
+If port 8080 is taken (for example by the app running from the IDE), publish the API on another
+port: `APP_PORT=18080 docker compose up --build`. The database has no volume, so
+`docker compose down` followed by `up` starts from a fresh random dataset.
+
+### From the IDE or the command line
+
+1. Start the dependencies:
 
    ```bash
-   docker compose up -d postgres
+   docker compose up -d postgres wiremock mailpit
    ```
 
 2. Start the application with the `local` profile, either from the command line:
@@ -57,9 +78,45 @@ Windows (PowerShell or cmd):
       `SPRING_PROFILES_ACTIVE=local`).
    4. Run or Debug.
 
-The `local` profile connects to the Docker database, creates random sample data on the first start
-(doctors, rooms, patients — see D-024) and defines the credentials below. Health check:
-`GET http://localhost:8080/actuator/health`.
+The `local` profile connects to the Docker containers, creates random sample data on the first
+start (doctors, rooms, patients — see D-024) and defines the credentials below.
+
+## Operating the service
+
+### Health probes
+
+| Endpoint | Checks | Use |
+|----------|--------|-----|
+| `GET /actuator/health/liveness` | The application only | Restart the instance when it fails |
+| `GET /actuator/health/readiness` | The application and PostgreSQL | Stop sending traffic when it fails |
+
+Both are public and answer `{"status":"UP"}`; with credentials they also list the components
+checked. External systems (calendar, rooms, SMTP) are never part of health: when one is down, the
+outbox keeps retrying and the service stays available (D-001).
+
+### Metrics
+
+Under `/actuator/metrics` (any valid credentials), e.g.
+`curl -u admin:admin-local http://localhost:8080/actuator/metrics/appointments.bookings`:
+
+| Metric | Type | Tags | What it tells |
+|--------|------|------|---------------|
+| `appointments.bookings` | Timer | `outcome`: `BOOKED`, `REPEATED`, an error `code` (e.g. `NO_DOCTOR_AVAILABLE`), `ERROR` | Booking volume, latency and outcomes; `NO_*_AVAILABLE` is a capacity signal |
+| `appointments.booking.conflicts` | Counter | `resource`: `doctor`, `room`, `patient` | Attempts that lost a slot to a concurrent request (contention, D-003) |
+| `appointments.outbox.oldest.pending.age` | Gauge (seconds) | — | How late post-booking actions are — **alert candidate** |
+| `appointments.outbox.failed` | Gauge | `type`: `DOCTOR_CALENDAR`, `ROOM_RESERVATION`, `EMAIL` | Tasks that need a person — **alert candidate** |
+
+Spring Boot's own metrics are there too (`http.server.requests`, JVM, connection pool).
+`appointments.bookings` counts requests that reach the service; malformed requests rejected before
+it (`VALIDATION_ERROR`, 401, 403) show in `http.server.requests`.
+
+### Logs and request ids
+
+Every response carries an `X-Request-Id` header: the caller's value when it sends a safe one
+(up to 64 letters, digits, `.`, `_` or `-`), otherwise a generated UUID. Every log line written while
+handling the request carries it: as a `requestId` JSON field in the container (structured logs,
+Elastic Common Schema), and as `[request-id]` in plain-text logs from the IDE. Logs contain ids only,
+never patient names, emails, phones or specialties.
 
 ## Calling the API
 
