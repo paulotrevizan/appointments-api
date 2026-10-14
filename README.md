@@ -9,7 +9,8 @@ Design: [docs/HLD.md](docs/HLD.md) · Decisions: [DECISIONS.md](DECISIONS.md) ·
 Implementation plan: [docs/PLAN.md](docs/PLAN.md) · Rules for contributors (and the AI): [CLAUDE.md](CLAUDE.md)
 
 **Contents:** [Quick start](#quick-start) · [Architecture](#architecture) ·
-[Run the tests](#run-the-tests) · [Run locally](#run-locally) · [Calling the API](#calling-the-api) ·
+[Run the tests](#run-the-tests) · [Run locally](#run-locally) ·
+[Reset the database](#reset-the-database-for-a-demo) · [Calling the API](#calling-the-api) ·
 [Configuration](#configuration) · [Operating the service](#operating-the-service) ·
 [Runbook](#runbook-failed-post-booking-tasks) · [Conformance](#conformance-invariants-and-decisions--tests) ·
 [Project structure](#project-structure) · [How to extend](#how-to-extend) ·
@@ -126,8 +127,25 @@ reservation systems) and Mailpit (a fake SMTP server):
 | Calls to the calendar and room systems | WireMock request journal: <http://localhost:8089/__admin/requests> |
 
 If port 8080 is taken (for example by the app running from the IDE), publish the API on another
-port: `APP_PORT=18080 docker compose up --build`. The database has no volume, so
-`docker compose down` followed by `up` starts from a fresh random dataset.
+port: `APP_PORT=18080 docker compose up --build`.
+
+### Reset the database (for a demo)
+
+`docker compose up --build` rebuilds the application but keeps the PostgreSQL container, and with it
+every appointment booked so far. To start from an empty database:
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+`down` removes the containers and `-v` the database's storage, so the next start seeds a fresh random
+dataset (D-024): the same six specialties and three demo patients, new random doctors, rooms and
+patients. Check it with the admin listing, which returns `{"items":[],"nextCursor":null}`:
+
+```bash
+curl -s -u admin:admin-local http://localhost:8080/api/v1/admin/appointments
+```
 
 ### From the IDE or the command line
 
