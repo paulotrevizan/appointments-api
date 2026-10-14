@@ -22,6 +22,7 @@
 		<datafaker.version>2.7.0</datafaker.version>
 		<springdoc.version>3.1.1</springdoc.version>
 		<wiremock.version>3.13.2</wiremock.version>
+		<greenmail.version>2.1.14</greenmail.version>
 	</properties>
 
 	<dependencies>
@@ -45,6 +46,12 @@
 			<!-- HTTP service clients for the calendar and room systems -->
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-restclient</artifactId>
+		</dependency>
+		<dependency>
+			<!-- Already on the runtime classpath via the mail starter; compile scope for the SMTP
+			     reply codes used to classify failures (D-017) -->
+			<groupId>org.eclipse.angus</groupId>
+			<artifactId>angus-mail</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -141,6 +148,12 @@
 			<groupId>org.wiremock</groupId>
 			<artifactId>wiremock-standalone</artifactId>
 			<version>${wiremock.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.icegreen</groupId>
+			<artifactId>greenmail-junit5</artifactId>
+			<version>${greenmail.version}</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

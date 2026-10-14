@@ -2,16 +2,26 @@ package pt.paulotrevizan.appointments.postbooking.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.SendFailedException;
+import jakarta.mail.internet.AddressException;
+import jakarta.mail.internet.InternetAddress;
 import java.io.IOException;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.IntStream;
+import org.eclipse.angus.mail.smtp.SMTPAddressFailedException;
+import org.eclipse.angus.mail.smtp.SMTPSendFailedException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatusCode;
+import org.springframework.mail.MailAuthenticationException;
+import org.springframework.mail.MailParseException;
+import org.springframework.mail.MailSendException;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -88,6 +98,40 @@ class RetryPolicyTest {
         .isTrue();
   }
 
+  @ParameterizedTest(name = "SMTP {0} fails immediately")
+  @ValueSource(ints = {550, 553, 554})
+  @DisplayName("D-017: a permanent SMTP rejection (5xx) is not retryable")
+  void givenPermanentSmtpRejection_whenClassifying_thenNotRetryable(int replyCode) {
+    assertThat(RetryPolicy.isRetryable(rejectedRecipient(replyCode))).isFalse();
+    assertThat(RetryPolicy.isRetryable(rejectedMessage(replyCode))).isFalse();
+  }
+
+  @ParameterizedTest(name = "SMTP {0} is retried")
+  @ValueSource(ints = {421, 450, 451, 452})
+  @DisplayName("D-017: a transient SMTP rejection (4xx) is retryable")
+  void givenTransientSmtpRejection_whenClassifying_thenRetryable(int replyCode) {
+    assertThat(RetryPolicy.isRetryable(rejectedRecipient(replyCode))).isTrue();
+    assertThat(RetryPolicy.isRetryable(rejectedMessage(replyCode))).isTrue();
+  }
+
+  @Test
+  @DisplayName("D-017: an unreachable or failing SMTP server is retryable")
+  void givenSmtpConnectionOrAuthenticationFailure_whenClassifying_thenRetryable() {
+    assertThat(
+            RetryPolicy.isRetryable(
+                new MailSendException(
+                    "Mail server connection failed",
+                    new MessagingException("Could not connect to SMTP host"))))
+        .isTrue();
+    assertThat(RetryPolicy.isRetryable(new MailAuthenticationException("535 invalid"))).isTrue();
+  }
+
+  @Test
+  @DisplayName("D-017: an email that cannot be built is not retryable")
+  void givenUnparseableMessage_whenClassifying_thenNotRetryable() {
+    assertThat(RetryPolicy.isRetryable(new MailParseException("Illegal address"))).isFalse();
+  }
+
   @Test
   @DisplayName("A retryable failure gets a delay until the maximum attempts are used")
   void givenRetryableFailure_whenAttemptsRemain_thenDelayed() {
@@ -108,6 +152,28 @@ class RetryPolicyTest {
   private static RetryPolicy policy(double jitter) {
     return new RetryPolicy(
         new OutboxProperties(20, Duration.ofSeconds(30), MAX_ATTEMPTS, INITIAL, MAX, 2, jitter));
+  }
+
+  // What JavaMail throws when RCPT TO is refused: the reply is nested in a SendFailedException.
+  private static MailSendException rejectedRecipient(int replyCode) {
+    try {
+      InternetAddress recipient = new InternetAddress("patient@example.com");
+      SendFailedException invalidAddresses =
+          new SendFailedException(
+              "Invalid Addresses",
+              new SMTPAddressFailedException(recipient, "RCPT TO", replyCode, "rejected"));
+      return new MailSendException(Map.of(new Object(), invalidAddresses));
+    } catch (AddressException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  // What JavaMail throws when MAIL FROM or DATA is refused.
+  private static MailSendException rejectedMessage(int replyCode) {
+    return new MailSendException(
+        Map.of(
+            new Object(),
+            new SMTPSendFailedException("DATA", replyCode, "rejected", null, null, null, null)));
   }
 
   private static RestClientResponseException httpError(int status) {

@@ -16,7 +16,7 @@ class DoctorCalendarTaskHandler {
   private final DoctorCalendarGateway calendar;
 
   void handle(UUID appointmentId) {
-    Appointment appointment = appointments.findWithRoomById(appointmentId).orElseThrow();
+    Appointment appointment = appointments.findWithDetailsById(appointmentId).orElseThrow();
     // No specialty or patient data: it would reveal health data to another system (HLD 8).
     calendar.addEvent(
         appointment.getDoctor().getId(),

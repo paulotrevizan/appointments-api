@@ -10,6 +10,10 @@ spring:
         base-url: http://localhost:8089
       rooms:
         base-url: http://localhost:8089
+  # Mailpit catches every email (docker-compose.yml).
+  mail:
+    host: localhost
+    port: 1025
 
 appointments:
   security:
@@ -22,3 +26,5 @@ appointments:
     max-doctors-per-specialty: 5
     rooms: 10
     patients: 200
+  email:
+    from: appointments@clinic.local

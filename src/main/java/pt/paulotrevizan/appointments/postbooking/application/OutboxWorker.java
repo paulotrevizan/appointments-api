@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -13,7 +12,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import pt.paulotrevizan.appointments.postbooking.domain.OutboxTask;
-import pt.paulotrevizan.appointments.postbooking.domain.OutboxTaskType;
 import pt.paulotrevizan.appointments.postbooking.persistence.OutboxTaskRepository;
 
 /**
@@ -26,11 +24,6 @@ import pt.paulotrevizan.appointments.postbooking.persistence.OutboxTaskRepositor
 @ConditionalOnBooleanProperty(name = "appointments.outbox.enabled", matchIfMissing = true)
 class OutboxWorker {
 
-  // EMAIL tasks stay PENDING until their handler exists (Step 5).
-  private static final List<String> HANDLED_TYPES =
-      Stream.of(OutboxTaskType.DOCTOR_CALENDAR, OutboxTaskType.ROOM_RESERVATION)
-          .map(Enum::name)
-          .toList();
   private static final int MAX_ERROR_LENGTH = 2000;
 
   private final OutboxTaskRepository tasks;
@@ -38,11 +31,11 @@ class OutboxWorker {
   private final RetryPolicy retryPolicy;
   private final DoctorCalendarTaskHandler calendarHandler;
   private final RoomReservationTaskHandler roomHandler;
+  private final EmailTaskHandler emailHandler;
 
   @Scheduled(fixedDelayString = "${appointments.outbox.poll-interval}")
   void poll() {
-    List<OutboxTask> claimed =
-        tasks.claimDue(HANDLED_TYPES, properties.batchSize(), seconds(properties.lease()));
+    List<OutboxTask> claimed = tasks.claimDue(properties.batchSize(), seconds(properties.lease()));
     // One virtual thread per task: a slow system cannot hold the rest of the batch past its lease.
     try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
       claimed.forEach(task -> executor.execute(() -> processSafely(task)));
@@ -75,7 +68,7 @@ class OutboxWorker {
     switch (task.getType()) {
       case DOCTOR_CALENDAR -> calendarHandler.handle(task.getAppointment().getId());
       case ROOM_RESERVATION -> roomHandler.handle(task.getAppointment().getId());
-      case EMAIL -> throw new IllegalStateException("EMAIL tasks are not claimed yet");
+      case EMAIL -> emailHandler.handle(task.getAppointment().getId());
     }
   }
 
