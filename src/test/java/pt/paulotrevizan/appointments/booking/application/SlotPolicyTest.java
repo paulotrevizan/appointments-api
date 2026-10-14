@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import pt.paulotrevizan.appointments.booking.domain.SlotInPastException;
 import pt.paulotrevizan.appointments.booking.domain.SlotNotAlignedException;
 
@@ -24,6 +26,19 @@ class SlotPolicyTest {
         .doesNotThrowAnyException();
     assertThatCode(() -> policy.validate(Instant.parse("2030-01-08T14:00:00Z")))
         .doesNotThrowAnyException();
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @ValueSource(
+      strings = {
+        "2030-01-12T10:00:00Z", // Saturday
+        "2030-01-08T03:00:00Z", // night
+        "2030-12-25T09:00:00Z", // public holiday
+        "2099-12-31T23:30:00Z" // far future: no booking horizon
+      })
+  @DisplayName("D-008: any future slot on the grid is bookable: weekends, nights, holidays, 2099")
+  void givenWeekendNightHolidayOrFarFutureSlot_whenValidated_thenAccepted(String slot) {
+    assertThatCode(() -> policy.validate(Instant.parse(slot))).doesNotThrowAnyException();
   }
 
   @Test
