@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -24,6 +25,32 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
       where a.id = :id
       """)
   Optional<Appointment> findWithDetailsById(@Param("id") UUID id);
+
+  /** D-016: first page of the admin listing, in (startAt, id) order. */
+  @Query(
+      """
+      select a from Appointment a
+        join fetch a.patient
+        join fetch a.specialty
+        join fetch a.doctor
+        join fetch a.room
+      order by a.startAt, a.id
+      """)
+  List<Appointment> findFirstPage(Limit limit);
+
+  /** D-016: the page after a cursor; seeks the (start_at, id) index instead of an offset. */
+  @Query(
+      """
+      select a from Appointment a
+        join fetch a.patient
+        join fetch a.specialty
+        join fetch a.doctor
+        join fetch a.room
+      where (a.startAt, a.id) > (:startAt, :id)
+      order by a.startAt, a.id
+      """)
+  List<Appointment> findPageAfter(
+      @Param("startAt") Instant startAt, @Param("id") UUID id, Limit limit);
 
   @Query(
       """

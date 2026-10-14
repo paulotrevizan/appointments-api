@@ -1,6 +1,7 @@
 package pt.paulotrevizan.appointments.common.web;
 
 import java.util.stream.Collectors;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
@@ -48,6 +50,35 @@ class ProblemDetailHandler extends ResponseEntityExceptionHandler {
             .sorted()
             .collect(Collectors.joining("; "));
     return validationError(detail);
+  }
+
+  // Constraints on query parameters, e.g. limit outside 1–100.
+  @Override
+  protected ResponseEntity<Object> handleHandlerMethodValidationException(
+      HandlerMethodValidationException ex,
+      HttpHeaders headers,
+      HttpStatusCode status,
+      WebRequest request) {
+    String detail =
+        ex.getParameterValidationResults().stream()
+            .flatMap(
+                result ->
+                    result.getResolvableErrors().stream()
+                        .map(
+                            error ->
+                                result.getMethodParameter().getParameterName()
+                                    + " "
+                                    + error.getDefaultMessage()))
+            .sorted()
+            .collect(Collectors.joining("; "));
+    return validationError(detail);
+  }
+
+  // A query parameter that cannot be converted, e.g. limit=abc.
+  @Override
+  protected ResponseEntity<Object> handleTypeMismatch(
+      TypeMismatchException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+    return validationError(ex.getPropertyName() + " has an invalid value");
   }
 
   @Override

@@ -1,6 +1,11 @@
 spring:
   main:
     banner-mode: off
+  # Lets tests count SQL statements (no N+1); the per-session metrics log stays quiet.
+  jpa:
+    properties:
+      hibernate:
+        generate_statistics: true
   # Tests that exercise the worker point these at WireMock and GreenMail.
   http:
     serviceclient:
@@ -21,3 +26,7 @@ appointments:
     enabled: false
   email:
     from: appointments@clinic.test
+
+logging:
+  level:
+    org.hibernate.engine.internal.StatisticalLoggingSessionEventListener: warn
