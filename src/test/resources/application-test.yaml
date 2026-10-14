@@ -1,13 +1,16 @@
 spring:
   main:
     banner-mode: off
-  # Tests that exercise the worker point both systems at WireMock.
+  # Tests that exercise the worker point these at WireMock and GreenMail.
   http:
     serviceclient:
       calendar:
         base-url: http://localhost:9
       rooms:
         base-url: http://localhost:9
+  mail:
+    host: 127.0.0.1
+    port: 9
 
 appointments:
   security:
@@ -16,3 +19,5 @@ appointments:
   # Tests that exercise the worker turn it on.
   outbox:
     enabled: false
+  email:
+    from: appointments@clinic.test

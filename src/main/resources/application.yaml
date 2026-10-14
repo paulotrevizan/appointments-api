@@ -24,6 +24,15 @@ spring:
         base-url: ${CALENDAR_BASE_URL}
       rooms:
         base-url: ${ROOMS_BASE_URL}
+  # Credentials and TLS via the standard spring.mail settings (e.g. SPRING_MAIL_USERNAME).
+  mail:
+    host: ${SMTP_HOST}
+    port: ${SMTP_PORT}
+    # JavaMail waits forever by default; every SMTP call is bounded like the HTTP ones (ms).
+    properties:
+      "[mail.smtp.connectiontimeout]": 2000
+      "[mail.smtp.timeout]": 5000
+      "[mail.smtp.writetimeout]": 5000
 
 server:
   shutdown: graceful
@@ -33,6 +42,11 @@ management:
     web:
       exposure:
         include: health
+  # D-001: the service stays healthy while an external system (here SMTP) is down; the outbox
+  # absorbs the outage.
+  health:
+    mail:
+      enabled: false
 
 appointments:
   booking:
@@ -51,3 +65,5 @@ appointments:
     max-backoff: 10m
     backoff-multiplier: 2
     backoff-jitter: 0.2
+  email:
+    from: ${EMAIL_FROM}

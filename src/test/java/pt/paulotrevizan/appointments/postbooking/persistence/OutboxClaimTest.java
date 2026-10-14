@@ -42,8 +42,6 @@ import pt.paulotrevizan.appointments.postbooking.domain.OutboxTaskType;
 @Import(TestcontainersConfiguration.class)
 class OutboxClaimTest {
 
-  private static final List<String> ALL_TYPES =
-      Arrays.stream(OutboxTaskType.values()).map(Enum::name).toList();
   private static final double LEASE_SECONDS = 30;
 
   private final OutboxTaskRepository tasks;
@@ -94,7 +92,7 @@ class OutboxClaimTest {
             executor.submit(
                 () -> {
                   start.await();
-                  return tasks.claimDue(ALL_TYPES, 10, LEASE_SECONDS);
+                  return tasks.claimDue(10, LEASE_SECONDS);
                 }));
       }
       start.countDown();
@@ -112,7 +110,7 @@ class OutboxClaimTest {
   void givenClaimedTask_whenLeaseStillValid_thenNotClaimedAgain() {
     createAppointmentsWithTasks(1);
 
-    List<OutboxTask> first = tasks.claimDue(ALL_TYPES, 10, LEASE_SECONDS);
+    List<OutboxTask> first = tasks.claimDue(10, LEASE_SECONDS);
 
     assertThat(first).hasSize(3);
     Instant databaseNow = jdbc.sql("SELECT now()").query(OffsetDateTime.class).single().toInstant();
@@ -121,7 +119,7 @@ class OutboxClaimTest {
             task ->
                 assertThat(task.getLockedUntil())
                     .isAfter(databaseNow.plus(Duration.ofSeconds(25))));
-    assertThat(tasks.claimDue(ALL_TYPES, 10, LEASE_SECONDS)).isEmpty();
+    assertThat(tasks.claimDue(10, LEASE_SECONDS)).isEmpty();
   }
 
   @Test
@@ -129,11 +127,11 @@ class OutboxClaimTest {
   void givenClaimedTask_whenLeaseExpired_thenClaimedAgain() {
     createAppointmentsWithTasks(1);
     List<UUID> firstClaim =
-        tasks.claimDue(ALL_TYPES, 10, LEASE_SECONDS).stream().map(OutboxTask::getId).toList();
+        tasks.claimDue(10, LEASE_SECONDS).stream().map(OutboxTask::getId).toList();
 
     jdbc.sql("UPDATE outbox_task SET locked_until = now() - interval '1 second'").update();
 
-    assertThat(tasks.claimDue(ALL_TYPES, 10, LEASE_SECONDS))
+    assertThat(tasks.claimDue(10, LEASE_SECONDS))
         .extracting(OutboxTask::getId)
         .containsExactlyInAnyOrderElementsOf(firstClaim);
   }
@@ -144,18 +142,26 @@ class OutboxClaimTest {
     createAppointmentsWithTasks(1);
     jdbc.sql("UPDATE outbox_task SET next_attempt_at = now() + interval '1 minute'").update();
 
-    assertThat(tasks.claimDue(ALL_TYPES, 10, LEASE_SECONDS)).isEmpty();
+    assertThat(tasks.claimDue(10, LEASE_SECONDS)).isEmpty();
   }
 
   @Test
   @DisplayName("An outcome recorded with an expired lease changes nothing")
   void givenLeaseTakenOverByAnotherClaim_whenOldClaimRecordsOutcome_thenIgnored() {
     createAppointmentsWithTasks(1);
-    OutboxTask stale = tasks.claimDue(ALL_TYPES, 1, LEASE_SECONDS).getFirst();
-    jdbc.sql("UPDATE outbox_task SET locked_until = now() - interval '1 second'").update();
-    OutboxTask current =
-        tasks.claimDue(List.of(stale.getType().name()), 1, LEASE_SECONDS).getFirst();
+    OutboxTask stale = tasks.claimDue(1, LEASE_SECONDS).getFirst();
+    // Only the stale task can be claimed again, once its lease has expired.
+    jdbc.sql(
+            """
+            UPDATE outbox_task
+            SET status = CASE WHEN id = :id THEN status ELSE 'DONE' END,
+                locked_until = now() - interval '1 second'
+            """)
+        .param("id", stale.getId())
+        .update();
+    OutboxTask current = tasks.claimDue(1, LEASE_SECONDS).getFirst();
 
+    assertThat(current.getId()).isEqualTo(stale.getId());
     assertThat(tasks.markFailed(stale.getId(), stale.getLockedUntil(), "late")).isZero();
     assertThat(tasks.markDone(current.getId(), current.getLockedUntil())).isOne();
     assertThat(

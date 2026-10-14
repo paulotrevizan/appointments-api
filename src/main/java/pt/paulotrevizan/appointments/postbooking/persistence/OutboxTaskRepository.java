@@ -1,7 +1,6 @@
 package pt.paulotrevizan.appointments.postbooking.persistence;
 
 import java.time.Instant;
-import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,7 +25,6 @@ public interface OutboxTaskRepository extends JpaRepository<OutboxTask, UUID> {
           WITH due AS (
             SELECT id FROM outbox_task
             WHERE status = 'PENDING'
-              AND type IN (:types)
               AND next_attempt_at <= now()
               AND (locked_until IS NULL OR locked_until < now())
             ORDER BY next_attempt_at
@@ -39,9 +37,7 @@ public interface OutboxTaskRepository extends JpaRepository<OutboxTask, UUID> {
           RETURNING t.*
           """)
   List<OutboxTask> claimDue(
-      @Param("types") Collection<String> types,
-      @Param("batchSize") int batchSize,
-      @Param("leaseSeconds") double leaseSeconds);
+      @Param("batchSize") int batchSize, @Param("leaseSeconds") double leaseSeconds);
 
   @Transactional
   @Modifying

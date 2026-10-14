@@ -17,6 +17,9 @@ import static org.awaitility.Awaitility.await;
 import com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder;
 import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
+import com.icegreen.greenmail.configuration.GreenMailConfiguration;
+import com.icegreen.greenmail.junit5.GreenMailExtension;
+import com.icegreen.greenmail.util.ServerSetupTest;
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
 import java.nio.charset.StandardCharsets;
@@ -73,10 +76,17 @@ class OutboxWorkerTest {
   static final WireMockExtension externals =
       WireMockExtension.newInstance().options(wireMockConfig().dynamicPort()).build();
 
+  @RegisterExtension
+  static final GreenMailExtension smtp =
+      new GreenMailExtension(ServerSetupTest.SMTP.dynamicPort())
+          .withConfiguration(GreenMailConfiguration.aConfig().withDisabledAuthentication())
+          .withPerMethodLifecycle(false);
+
   @DynamicPropertySource
   static void externalSystems(DynamicPropertyRegistry registry) {
     registry.add("spring.http.serviceclient.calendar.base-url", externals::baseUrl);
     registry.add("spring.http.serviceclient.rooms.base-url", externals::baseUrl);
+    registry.add("spring.mail.port", () -> smtp.getSmtp().getPort());
   }
 
   private final MockMvcTester mvc;
@@ -140,7 +150,6 @@ class OutboxWorkerTest {
                     """
                         .formatted(booking.id()))));
     externals.verify(2, postRequestedFor(urlPathMatching("/.*")));
-    assertThat(task(booking, OutboxTaskType.EMAIL).status()).isEqualTo("PENDING");
   }
 
   @Test
