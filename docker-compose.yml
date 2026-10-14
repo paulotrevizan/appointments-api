@@ -1,5 +1,5 @@
-# Full local stack: `docker compose up --build`. No volume for PostgreSQL: `down` + `up` starts from
-# an empty database, and the app seeds a fresh random dataset (D-024).
+# Full local stack: `docker compose up --build`. No named volume for PostgreSQL: `down -v` + `up`
+# starts from an empty database, and the app seeds a fresh random dataset (D-024).
 services:
   app:
     build: .

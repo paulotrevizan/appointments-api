@@ -53,24 +53,44 @@ exists to protect one of them.
 
 Single deployable Spring Boot service (modular monolith) + PostgreSQL. No message broker.
 
+```mermaid
+flowchart LR
+  client["Patient app backend /<br/>Front-desk system"]
+  admin["Admin panel"]
+
+  subgraph service["Appointments Service (Spring Boot)"]
+    api["REST API"]
+    booking["Booking Service"]
+    allocation["Allocation Policy<br/>choose doctor + room"]
+    listing["Appointment Listing Service"]
+    worker["Outbox Worker<br/>scheduled"]
+    calendarPort["DoctorCalendarGateway"]
+    roomsPort["RoomReservationGateway"]
+    emailPort["EmailSender"]
+  end
+
+  db[("PostgreSQL")]
+  calendar["Doctor Calendar System"]
+  rooms["Room Reservation System"]
+  smtp["SMTP / Email provider"]
+
+  client -->|"POST /appointments"| api
+  admin -->|"GET /admin/appointments"| api
+  api --> booking
+  api --> listing
+  booking --> allocation
+  booking -->|"1 transaction:<br/>appointment + 3 outbox tasks"| db
+  listing -->|"keyset page +<br/>task statuses"| db
+  worker -->|"claims due<br/>PENDING tasks"| db
+  worker --> calendarPort
+  worker --> roomsPort
+  worker --> emailPort
+  calendarPort -.->|"HTTP"| calendar
+  roomsPort -.->|"HTTP"| rooms
+  emailPort -.->|"SMTP"| smtp
 ```
-[Patient app backend / Front-desk system]     [Admin panel]
-          │ POST /appointments                  │ GET /admin/appointments
-          ▼                                     ▼
-┌────────────────── Appointments Service (Spring Boot) ──────────────────┐
-│  REST API                                                              │
-│     │                                                                  │
-│  Booking Service ──▶ Allocation Policy (choose doctor + room)          │
-│     │                                                                  │
-│     ▼ 1 transaction: appointment + 3 outbox tasks                      │
-│  ─────────────────────────────────────────────▶ [PostgreSQL]           │
-│                                                     ▲                  │
-│  Outbox Worker (scheduled) ── claims PENDING ───────┘                  │
-│     ├─▶ CalendarAdapter ──▶ [Doctor Calendar System]  (external)       │
-│     ├─▶ RoomAdapter     ──▶ [Room Reservation System] (external)       │
-│     └─▶ EmailAdapter    ──▶ [SMTP / Email provider]   (external)       │
-└────────────────────────────────────────────────────────────────────────┘
-```
+
+Dashed lines are calls to external systems; each goes through a port (D-006).
 
 ### Components
 
@@ -133,14 +153,21 @@ appointment id as idempotency key to external systems (A7).
 
 1. Validate `limit` (default 20, max 100). If a `cursor` is present, decode it into
    (`startAt`, `id`); malformed → **400** `INVALID_CURSOR`.
-2. One query, served by the index on (`start_at`, `id`):
+2. One query, served by the index on (`start_at`, `id`), with patient, specialty, doctor and room
+   fetched in the same statement. The first page and the following pages are two variants of it
+   (`findFirstPage` / `findPageAfter` in `AppointmentRepository`):
    ```sql
+   -- first page (no cursor)
    SELECT ... FROM appointment a
-     JOIN patient p ... JOIN doctor d ... JOIN room r ... JOIN specialty s ...
-   WHERE (:cursorStartAt IS NULL OR (a.start_at, a.id) > (:cursorStartAt, :cursorId))
+     JOIN patient p ... JOIN specialty s ... JOIN doctor d ... JOIN room r ...
    ORDER BY a.start_at, a.id
-   LIMIT :limit + 1
+   FETCH FIRST :limit + 1 ROWS ONLY
+
+   -- next pages: same query plus a row comparison with the cursor
+   WHERE (a.start_at, a.id) > (:cursorStartAt, :cursorId)
    ```
+   Two variants instead of one `WHERE (:cursorStartAt IS NULL OR …)`: PostgreSQL cannot infer the
+   type of a null parameter, and the `OR` would keep the planner from seeking the index.
 3. Load the post-booking statuses for the returned ids in **one** extra query
    (`outbox_task WHERE appointment_id IN (...)`) — no N+1.
 4. Got `limit + 1` rows → drop the extra one and build `nextCursor` from the last returned
@@ -257,13 +284,14 @@ Next page: `GET /api/v1/admin/appointments?limit=20&cursor=eyJzdGFydEF0Ijoi...`
 
 ## 8. Data model (PostgreSQL)
 
-```
-PATIENT   1 ──── N APPOINTMENT
-SPECIALTY 1 ──── N DOCTOR
-SPECIALTY 1 ──── N APPOINTMENT
-DOCTOR    1 ──── N APPOINTMENT
-ROOM      1 ──── N APPOINTMENT
-APPOINTMENT 1 ── 3 OUTBOX_TASK
+```mermaid
+erDiagram
+  PATIENT ||--o{ APPOINTMENT : books
+  SPECIALTY ||--o{ DOCTOR : has
+  SPECIALTY ||--o{ APPOINTMENT : "requested for"
+  DOCTOR ||--o{ APPOINTMENT : attends
+  ROOM ||--o{ APPOINTMENT : hosts
+  APPOINTMENT ||--|{ OUTBOX_TASK : "has 3"
 ```
 
 | Table | Columns | Constraints / indexes |

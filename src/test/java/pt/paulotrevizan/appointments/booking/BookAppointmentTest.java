@@ -3,6 +3,8 @@ package pt.paulotrevizan.appointments.booking;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.jayway.jsonpath.JsonPath;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -114,6 +116,26 @@ class BookAppointmentTest {
     assertThat(result).bodyJson().extractingPath("$.patient.email").isEqualTo(patient.getEmail());
     assertThat(result).bodyJson().extractingPath("$.patient.phone").isEqualTo(patient.getPhone());
     assertThat(result).bodyJson().extractingPath("$.createdAt").isNotNull();
+  }
+
+  @Test
+  @DisplayName(
+      "D-015: the 201 carries the whole appointment and no Location: there is no read-by-id")
+  void givenBooking_whenCreated_thenNoLocationHeaderAndNoReadByIdEndpoint() {
+    Specialty specialty = newSpecialty();
+    newDoctor(specialty);
+    newRoom();
+
+    MvcTestResult result = book(newPatient().getId(), specialty.getCode(), START, bookingClient());
+
+    assertThat(result).hasStatus(HttpStatus.CREATED);
+    assertThat(result).headers().doesNotContainHeader(HttpHeaders.LOCATION);
+    String id =
+        JsonPath.read(
+            new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8),
+            "$.id");
+    assertThat(mvc.get().uri(URI + "/" + id).headers(bookingClient()))
+        .hasStatus(HttpStatus.NOT_FOUND);
   }
 
   @Test
