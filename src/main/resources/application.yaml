@@ -10,6 +10,9 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      # Milliseconds a request waits for a connection; then it gets a 503 (HLD 12), not a 30 s hang.
+      connection-timeout: 3000
   jpa:
     open-in-view: false
     hibernate:
