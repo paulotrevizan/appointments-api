@@ -1,6 +1,7 @@
 package pt.paulotrevizan.appointments.postbooking.persistence;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -15,6 +16,8 @@ import pt.paulotrevizan.appointments.postbooking.domain.OutboxTask;
  * match on {@code locked_until}, so an instance whose lease expired changes nothing.
  */
 public interface OutboxTaskRepository extends JpaRepository<OutboxTask, UUID> {
+
+  List<OutboxTask> findByAppointmentIdIn(Collection<UUID> appointmentIds);
 
   /** Leases up to {@code batchSize} due tasks, skipping rows another instance is claiming. */
   @Transactional
