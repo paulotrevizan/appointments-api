@@ -1,5 +1,10 @@
 # Implementation Plan
 
+> **Status: complete.** Steps 0–8 are implemented and merged. This file keeps each step as it was
+> planned; changes made during or after a step are recorded in [`DECISIONS.md`](../DECISIONS.md),
+> and the current design and configuration are in [`HLD.md`](HLD.md) and the
+> [README](../README.md).
+
 Each step is one branch and one Pull Request, squash-merged into `main` after review. Steps
 are done **in order**, one at a time, following
 [`CLAUDE.md`](../CLAUDE.md). Acceptance criteria are behaviours that must be proven by tests
@@ -16,7 +21,9 @@ are done **in order**, one at a time, following
 
 ## Default configuration values
 
-All configurable in `application.yaml` via typed `@ConfigurationProperties`.
+Defaults agreed before implementation. The slot duration is fixed by the schema; the rest are
+settings in `application.yaml`. The current list, with every setting and environment variable, is
+in the README, section *Configuration*.
 
 | Setting | Default |
 |---------|---------|
@@ -159,7 +166,8 @@ All configurable in `application.yaml` via typed `@ConfigurationProperties`.
 - `RetryPolicy`: exponential backoff with cap and jitter; max attempts; failure classification
   (D-017).
 - Ports `DoctorCalendarGateway`, `RoomReservationGateway` with `RestClient` adapters (timeouts,
-  `Idempotency-Key: {appointmentId}`, contracts in HLD §7.3).
+  `Idempotency-Key: {appointmentId}`, contracts in HLD §7.3). *Implemented, after review, as
+  Spring Boot HTTP service clients (`@HttpExchange` interfaces), which use `RestClient`.*
 
 **Acceptance criteria** (WireMock for externals, Awaitility for async)
 - After a booking, the calendar and room systems each receive exactly one request with the
