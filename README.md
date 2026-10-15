@@ -715,21 +715,21 @@ admin listing, and the shape of both payloads. What changed during development, 
 
 ## How AI was used
 
-AI (Anthropic's Claude) was used in two ways, always with a person deciding:
+I used AI (Anthropic's Claude) in two ways. In both, the decisions and the trade-offs are mine.
 
-- **Design.** The problem was analysed and the options for each decision explored and challenged
-  with AI. The decisions themselves — and the trade-offs accepted — are the author's, recorded in
-  [DECISIONS.md](DECISIONS.md) and the [HLD](docs/HLD.md).
+- **Design.** I analysed the problem and drew a first high-level design
+  ([docs/original-design-sketch.png](docs/original-design-sketch.png)). Then, I explored and
+  challenged the first idea and options for each decision with AI. Every decision and the trade-offs I accepted
+  with each of them, are recorded in [DECISIONS.md](DECISIONS.md) and the [HLD](docs/HLD.md).
 - **Implementation.** Claude Code implemented [docs/PLAN.md](docs/PLAN.md) one step at a time,
-  following the rules in [CLAUDE.md](CLAUDE.md): one branch and one pull request per step, the scope
-  and acceptance criteria restated before coding, `./mvnw verify` green before opening the pull
-  request, and each acceptance criterion mapped to the tests that prove it in the pull request
-  description. The AI could not change an invariant or a decision, add a dependency, push to `main`
-  or merge.
+  under the rules I set in [CLAUDE.md](CLAUDE.md): one branch and one pull request per step, the
+  scope and acceptance criteria restated before coding, `./mvnw verify` green before opening the
+  pull request and each acceptance criteria mapped to the tests that prove it. I made explicit rules that did not
+  allow it to change an invariant or a decision, add a dependency, push to `main` or merge.
 
-Every pull request was reviewed and merged by the author. Review feedback came back as new commits
-on the same branch — for example, replacing hand-written `RestClient` adapters with Spring Boot HTTP
-service clients, naming the admin listing classes after their use case, and documenting each new
-endpoint in this README. The tests, which assert behaviour against real infrastructure rather than
-mocks of our own classes, are what make AI-written code trustworthy here: they are the definition
-of done.
+I reviewed and merged every pull request. My review feedback came back as new commits on the same
+branch: for example, replacing hand-written `RestClient` adapters with Spring Boot HTTP service
+clients, naming the admin listing classes after their use case and also, documenting each new endpoint
+in this README. I believe that what makes the AI-written code trustworthy for this problem is the test suite: 
+it asserts behaviour against real infrastructure, ensuring not mocks of our own classes and it was the definition 
+of done for every step.
