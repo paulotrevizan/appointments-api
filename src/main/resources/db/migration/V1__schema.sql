@@ -1,5 +1,3 @@
-CREATE EXTENSION IF NOT EXISTS btree_gist;
-
 CREATE TABLE patient (
     id         uuid         NOT NULL,
     name       varchar(200) NOT NULL,
@@ -47,7 +45,6 @@ CREATE TABLE appointment (
     room_id      uuid        NOT NULL,
     start_at     timestamptz NOT NULL,
     end_at       timestamptz NOT NULL,
-    slot         tstzrange GENERATED ALWAYS AS (tstzrange(start_at, end_at, '[)')) STORED,
     status       varchar(20) NOT NULL,
     created_at   timestamptz NOT NULL,
     updated_at   timestamptz NOT NULL,
@@ -58,16 +55,23 @@ CREATE TABLE appointment (
     CONSTRAINT appointment_room_fkey FOREIGN KEY (room_id) REFERENCES room (id),
     CONSTRAINT appointment_status_check CHECK (status IN ('CONFIRMED', 'CANCELLED')),
     CONSTRAINT appointment_end_after_start_check CHECK (end_at > start_at),
-    -- I1
-    CONSTRAINT appointment_doctor_no_overlap
-        EXCLUDE USING gist (doctor_id WITH =, slot WITH &&) WHERE (status = 'CONFIRMED'),
-    -- I2
-    CONSTRAINT appointment_room_no_overlap
-        EXCLUDE USING gist (room_id WITH =, slot WITH &&) WHERE (status = 'CONFIRMED'),
-    -- I5
-    CONSTRAINT appointment_patient_no_overlap
-        EXCLUDE USING gist (patient_id WITH =, slot WITH &&) WHERE (status = 'CONFIRMED')
+    -- D-007: fixed 30-minute slots on the :00 / :30 grid.
+    CONSTRAINT appointment_fixed_duration_check CHECK (end_at - start_at = interval '30 minutes'),
+    CONSTRAINT appointment_grid_check CHECK (extract(epoch FROM start_at) % 1800 = 0)
 );
+
+-- D-002: with fixed slots on the grid, two bookings overlap only when they start at the same
+-- instant, so partial unique indexes enforce I1, I2 and I5. Unlike exclusion constraints they check
+-- before inserting: concurrent conflicting inserts fail cleanly instead of deadlocking.
+-- I1
+CREATE UNIQUE INDEX appointment_doctor_no_overlap
+    ON appointment (doctor_id, start_at) WHERE status = 'CONFIRMED';
+-- I2
+CREATE UNIQUE INDEX appointment_room_no_overlap
+    ON appointment (room_id, start_at) WHERE status = 'CONFIRMED';
+-- I5
+CREATE UNIQUE INDEX appointment_patient_no_overlap
+    ON appointment (patient_id, start_at) WHERE status = 'CONFIRMED';
 
 CREATE INDEX appointment_start_at_id_idx ON appointment (start_at, id);
 

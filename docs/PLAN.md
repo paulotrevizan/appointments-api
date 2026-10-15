@@ -133,7 +133,8 @@ in the README, section *Configuration*.
 ## Step 3 — Concurrency and duplicate protection
 
 **Scope**
-- `V2` migration (D-002): partial unique indexes `appointment_doctor_no_overlap`,
+- `V2` migration (D-002; *folded into `V1` before the first release, so the repository has a single
+  migration*): partial unique indexes `appointment_doctor_no_overlap`,
   `appointment_room_no_overlap`, `appointment_patient_no_overlap` on (resource, `start_at`)
   `WHERE status = 'CONFIRMED'` replace the exclusion constraints; `CHECK` constraints fix the
   duration (30 min) and the grid.

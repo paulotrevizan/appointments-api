@@ -704,7 +704,7 @@ admin listing, and the shape of both payloads. What changed during development, 
 | In the sketch | Implemented | Why |
 |---------------|-------------|-----|
 | A repeated request returns `200` | `201` with the same body as the original response | Same response however many times it is sent; clients need no special case (D-011) |
-| Overlaps blocked by `EXCLUDE USING gist` on a `slot tstzrange` column | Partial unique indexes on (doctor / room / patient, `start_at`) plus `CHECK` constraints that fix the 30-minute duration and the grid; `slot` dropped (migration `V2`) | Under 20 parallel requests the exclusion constraints deadlocked; unique indexes fail cleanly (D-002, measured) |
+| Overlaps blocked by `EXCLUDE USING gist` on a `slot tstzrange` column | Partial unique indexes on (doctor / room / patient, `start_at`) plus `CHECK` constraints that fix the 30-minute duration and the grid; `slot` dropped (the schema is one migration, `V1`; the original exclusion constraints are in the git history) | Under 20 parallel requests the exclusion constraints deadlocked; unique indexes fail cleanly (D-002, measured) |
 | On a conflict, drop that candidate and try the next one | Each attempt is a new transaction with fresh candidates, retried up to 3 times by Spring's `@Retryable` | Simpler and correct under contention; an identical request finds the winner's appointment (D-003) |
 | `FAILED` "after N attempts (TBD)", every failure retried | 10 attempts, backoff 5 s × 2 capped at 10 min with ±20 % jitter; HTTP 4xx and SMTP 5xx fail at once | Retrying a rejection only delays the alert (D-005, D-017) |
 | Errors described by HTTP status | A stable `code` per error in RFC 9457 problem details | Clients branch on `code`, not on text (HLD §7) |
