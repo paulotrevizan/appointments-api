@@ -704,7 +704,7 @@ admin listing, and the shape of both payloads. What changed during development, 
 | In the sketch | Implemented | Why |
 |---------------|-------------|-----|
 | A repeated request returns `200` | `201` with the same body as the original response | Same response however many times it is sent; clients need no special case (D-011) |
-| Overlaps blocked by `EXCLUDE USING gist` on a `slot tstzrange` column | Partial unique indexes on (doctor / room / patient, `start_at`) plus `CHECK` constraints that fix the 30-minute duration and the grid; `slot` dropped (migration `V2`) | Under 20 parallel requests the exclusion constraints deadlocked; unique indexes fail cleanly (D-002, measured) |
+| Overlaps blocked by `EXCLUDE USING gist` on a `slot tstzrange` column | Partial unique indexes on (doctor / room / patient, `start_at`) plus `CHECK` constraints that fix the 30-minute duration and the grid; `slot` dropped (the schema is one migration, `V1`; the original exclusion constraints are in the git history) | Under 20 parallel requests the exclusion constraints deadlocked; unique indexes fail cleanly (D-002, measured) |
 | On a conflict, drop that candidate and try the next one | Each attempt is a new transaction with fresh candidates, retried up to 3 times by Spring's `@Retryable` | Simpler and correct under contention; an identical request finds the winner's appointment (D-003) |
 | `FAILED` "after N attempts (TBD)", every failure retried | 10 attempts, backoff 5 s × 2 capped at 10 min with ±20 % jitter; HTTP 4xx and SMTP 5xx fail at once | Retrying a rejection only delays the alert (D-005, D-017) |
 | Errors described by HTTP status | A stable `code` per error in RFC 9457 problem details | Clients branch on `code`, not on text (HLD §7) |
@@ -715,21 +715,21 @@ admin listing, and the shape of both payloads. What changed during development, 
 
 ## How AI was used
 
-AI (Anthropic's Claude) was used in two ways, always with a person deciding:
+I used AI (Anthropic's Claude) in two ways. In both, the decisions and the trade-offs are mine.
 
-- **Design.** The problem was analysed and the options for each decision explored and challenged
-  with AI. The decisions themselves — and the trade-offs accepted — are the author's, recorded in
-  [DECISIONS.md](DECISIONS.md) and the [HLD](docs/HLD.md).
+- **Design.** I analysed the problem and drew a first high-level design
+  ([docs/original-design-sketch.png](docs/original-design-sketch.png)). Then, I explored and
+  challenged the first idea and options for each decision with AI. Every decision and the trade-offs I accepted
+  with each of them, are recorded in [DECISIONS.md](DECISIONS.md) and the [HLD](docs/HLD.md).
 - **Implementation.** Claude Code implemented [docs/PLAN.md](docs/PLAN.md) one step at a time,
-  following the rules in [CLAUDE.md](CLAUDE.md): one branch and one pull request per step, the scope
-  and acceptance criteria restated before coding, `./mvnw verify` green before opening the pull
-  request, and each acceptance criterion mapped to the tests that prove it in the pull request
-  description. The AI could not change an invariant or a decision, add a dependency, push to `main`
-  or merge.
+  under the rules I set in [CLAUDE.md](CLAUDE.md): one branch and one pull request per step, the
+  scope and acceptance criteria restated before coding, `./mvnw verify` green before opening the
+  pull request and each acceptance criteria mapped to the tests that prove it. I made explicit rules that did not
+  allow it to change an invariant or a decision, add a dependency, push to `main` or merge.
 
-Every pull request was reviewed and merged by the author. Review feedback came back as new commits
-on the same branch — for example, replacing hand-written `RestClient` adapters with Spring Boot HTTP
-service clients, naming the admin listing classes after their use case, and documenting each new
-endpoint in this README. The tests, which assert behaviour against real infrastructure rather than
-mocks of our own classes, are what make AI-written code trustworthy here: they are the definition
-of done.
+I reviewed and merged every pull request. My review feedback came back as new commits on the same
+branch: for example, replacing hand-written `RestClient` adapters with Spring Boot HTTP service
+clients, naming the admin listing classes after their use case and also, documenting each new endpoint
+in this README. I believe that what makes the AI-written code trustworthy for this problem is the test suite: 
+it asserts behaviour against real infrastructure, ensuring not mocks of our own classes and it was the definition 
+of done for every step.
